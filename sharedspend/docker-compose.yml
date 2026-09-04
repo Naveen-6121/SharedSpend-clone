@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./sharedspend.db
+      - SECRET_KEY=dev_secret_please_change
+      - ACCESS_TOKEN_EXPIRE_MINUTES=15
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - CORS_ORIGINS=http://localhost:5173
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
