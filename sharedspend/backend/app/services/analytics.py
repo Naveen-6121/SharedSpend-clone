@@ -86,22 +86,28 @@ async def get_summary(
         }
     ]
 
-    # paid_by_member (shared payer breakdown)
+    # paid_by_member — personal transactions marked add_to_settlement, aggregated by payer
+    # (SHARED transactions no longer have a payer under the new model)
     paid_q = (
         select(Transaction.payer_id, func.sum(Transaction.amount).label("paid"))
         .where(
-            Transaction.type == "SHARED",
+            Transaction.type == "PERSONAL",
+            Transaction.add_to_settlement == True,  # noqa: E712
             Transaction.is_deleted == False,  # noqa: E712
             Transaction.date >= start,
             Transaction.date <= end,
+            Transaction.payer_id.isnot(None),
         )
         .group_by(Transaction.payer_id)
     )
     if group_id:
-        paid_q = paid_q.where(Transaction.group_id == group_id)
+        # only personal txns paid by group members
+        member_ids_q = select(GroupMember.user_id).where(GroupMember.group_id == group_id)
+        paid_q = paid_q.where(Transaction.payer_id.in_(member_ids_q))
     else:
         member_groups2 = select(GroupMember.group_id).where(GroupMember.user_id == current_user_id)
-        paid_q = paid_q.where(Transaction.group_id.in_(member_groups2))
+        member_ids_q2 = select(GroupMember.user_id).where(GroupMember.group_id.in_(member_groups2))
+        paid_q = paid_q.where(Transaction.payer_id.in_(member_ids_q2))
 
     paid_rows = (await db.execute(paid_q)).all()
     paid_by_member = []
@@ -321,10 +327,12 @@ async def get_members(
         user_res = await db.execute(select(User).where(User.id == m.user_id))
         user = user_res.scalar_one_or_none()
 
+        # Under new model: SHARED has no payer.
+        # "paid" = personal transactions by this member that are marked add_to_settlement
         paid_res = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount), 0)).where(
-                Transaction.type == "SHARED",
-                Transaction.group_id == group_id,
+                Transaction.type == "PERSONAL",
+                Transaction.add_to_settlement == True,  # noqa: E712
                 Transaction.payer_id == m.user_id,
                 Transaction.is_deleted == False,  # noqa: E712
                 Transaction.date >= start,

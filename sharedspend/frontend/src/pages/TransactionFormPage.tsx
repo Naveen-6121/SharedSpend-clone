@@ -29,12 +29,13 @@ const schema = z.object({
   group_id: z.string().optional().nullable(),
   payer_id: z.string().optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
+  add_to_settlement: z.boolean(),
 }).superRefine((d, ctx) => {
   if (d.type === 'SHARED' && !d.group_id) {
     ctx.addIssue({ code: 'custom', path: ['group_id'], message: 'Group is required for shared transactions' })
   }
-  if (d.type === 'SHARED' && !d.payer_id) {
-    ctx.addIssue({ code: 'custom', path: ['payer_id'], message: 'Payer is required for shared transactions' })
+  if (d.type === 'PERSONAL' && !d.payer_id) {
+    ctx.addIssue({ code: 'custom', path: ['payer_id'], message: 'Payer is required for personal transactions' })
   }
 })
 type Form = z.infer<typeof schema>
@@ -47,6 +48,8 @@ export function TransactionFormPage() {
 
   const [suggestion, setSuggestion] = useState<{ name: string; id: string } | null>(null)
   const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
+  // participant IDs for settlement split (all group members by default)
+  const [participantIds, setParticipantIds] = useState<Set<string>>(new Set())
 
   const { data: existing, isLoading: loadingTx } = useTransaction(id)
   const { data: categories } = useCategories(activeGroup?.id)
@@ -65,6 +68,7 @@ export function TransactionFormPage() {
       group_id: activeGroup?.id ?? null,
       payer_id: null,
       notes: null,
+      add_to_settlement: false,
     },
   })
 
@@ -72,6 +76,7 @@ export function TransactionFormPage() {
   const groupId = watch('group_id')
   const description = watch('description')
   const selectedCategoryId = watch('category_id')
+  const addToSettlement = watch('add_to_settlement')
 
   // Populate form for edit
   useEffect(() => {
@@ -85,22 +90,34 @@ export function TransactionFormPage() {
         group_id: existing.group_id,
         payer_id: existing.payer_id,
         notes: existing.notes,
+        add_to_settlement: existing.add_to_settlement ?? false,
       })
     }
   }, [existing, reset])
 
-  // When type switches, clear group/payer if PERSONAL
+  // When type switches, update dependent fields
   useEffect(() => {
-    if (txType === 'PERSONAL') {
-      setValue('group_id', null)
+    if (txType === 'SHARED') {
+      // SHARED: no payer, set group
       setValue('payer_id', null)
-    } else if (txType === 'SHARED' && !groupId && activeGroup) {
-      setValue('group_id', activeGroup.id)
+      if (!groupId && activeGroup) setValue('group_id', activeGroup.id)
+      setValue('add_to_settlement', false) // not applicable to SHARED
+    } else {
+      // PERSONAL: no group
+      setValue('group_id', null)
     }
-  }, [txType, setValue, groupId, activeGroup])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txType])
 
-  // Load group members for payer selector
-  const { data: members } = useGroupMembers(txType === 'SHARED' ? (groupId ?? undefined) : undefined)
+  // Load group members for PERSONAL payer selector + settlement participants
+  const { data: members } = useGroupMembers(txType === 'PERSONAL' ? (activeGroup?.id ?? undefined) : undefined)
+
+  // When members load, default all members as participants
+  useEffect(() => {
+    if (members && members.length > 0) {
+      setParticipantIds(new Set(members.map((m) => m.user_id)))
+    }
+  }, [members])
 
   // Smart categorize with debounce
   const suggestCategory = useCallback(async (desc: string) => {
@@ -126,11 +143,16 @@ export function TransactionFormPage() {
 
   const onSubmit = (data: Form) => {
     const payload = {
-      ...data,
-      group_id: data.type === 'PERSONAL' ? null : (data.group_id ?? null),
-      payer_id: data.type === 'PERSONAL' ? null : (data.payer_id ?? null),
-      category_id: data.category_id ?? null,
-      notes: data.notes ?? null,
+      description: data.description,
+      amount: data.amount,
+      date: data.date,
+      type: data.type,
+      // SHARED: no payer, has group; PERSONAL: has payer, no group
+      group_id: data.type === 'SHARED' ? (data.group_id || null) : null,
+      payer_id: data.type === 'PERSONAL' ? (data.payer_id || null) : null,
+      category_id: data.category_id || null,
+      notes: data.notes || null,
+      add_to_settlement: data.type === 'PERSONAL' ? (data.add_to_settlement ?? false) : false,
     }
     if (isEdit) {
       updateMutation.mutate(payload, { onSuccess: () => navigate('/transactions') })
@@ -253,15 +275,20 @@ export function TransactionFormPage() {
                   </button>
                 ))}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {txType === 'SHARED'
+                  ? 'Shared expenses come from the group budget. No individual payer.'
+                  : 'Personal expenses are paid by one person and can be included in settlement.'}
+              </p>
             </fieldset>
 
-            {/* Shared-only: Payer */}
-            {txType === 'SHARED' && (
+            {/* PERSONAL only: Payer selector */}
+            {txType === 'PERSONAL' && (
               <div className="space-y-1">
-                <Label htmlFor="payer">Payer *</Label>
+                <Label htmlFor="payer">Paid by *</Label>
                 <Select
                   value={watch('payer_id') ?? ''}
-                  onValueChange={(v) => setValue('payer_id', v)}
+                  onValueChange={(v) => setValue('payer_id', v || null)}
                 >
                   <SelectTrigger id="payer" aria-required="true"
                     aria-describedby={errors.payer_id ? 'payer-error' : undefined}>
@@ -269,7 +296,7 @@ export function TransactionFormPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {!members?.length
-                      ? <SelectItem value="_none" disabled>No members found</SelectItem>
+                      ? <SelectItem value="_none" disabled>No group members — join a group first</SelectItem>
                       : members.map((m) => (
                         <SelectItem key={m.user_id} value={m.user_id}>
                           {m.display_name || m.username || m.user_id}
@@ -280,6 +307,67 @@ export function TransactionFormPage() {
                 </Select>
                 {errors.payer_id && (
                   <p id="payer-error" className="text-xs text-destructive" role="alert">{errors.payer_id.message}</p>
+                )}
+              </div>
+            )}
+
+            {/* PERSONAL only: Add to settlement + participants */}
+            {txType === 'PERSONAL' && (
+              <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+                <div className="flex items-start gap-3">
+                  <input
+                    id="add_to_settlement"
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-input accent-primary cursor-pointer"
+                    checked={addToSettlement}
+                    onChange={(e) => setValue('add_to_settlement', e.target.checked)}
+                    aria-describedby="settlement-hint"
+                  />
+                  <div>
+                    <Label htmlFor="add_to_settlement" className="cursor-pointer font-medium">
+                      Add to Settlement
+                    </Label>
+                    <p id="settlement-hint" className="text-xs text-muted-foreground mt-0.5">
+                      Split this expense equally among selected group members.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Participants — only visible when add_to_settlement is checked */}
+                {addToSettlement && members && members.length > 0 && (
+                  <div className="space-y-1 pl-7">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Participants</p>
+                    {members.map((m) => {
+                      const name = m.display_name || m.username || m.user_id
+                      const checked = participantIds.has(m.user_id)
+                      const share = participantIds.size > 0
+                        ? (watch('amount') || 0) / participantIds.size
+                        : 0
+                      return (
+                        <div key={m.user_id} className="flex items-center justify-between text-sm">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 rounded border-input accent-primary"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = new Set(participantIds)
+                                if (e.target.checked) next.add(m.user_id)
+                                else next.delete(m.user_id)
+                                setParticipantIds(next)
+                              }}
+                            />
+                            <span>{name}</span>
+                          </label>
+                          {checked && (
+                            <span className="text-xs tabular-nums text-muted-foreground">
+                              ₹{share.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
             )}

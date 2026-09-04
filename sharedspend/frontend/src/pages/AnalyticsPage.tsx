@@ -9,27 +9,26 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatINR, currentYear, currentMonth, monthName } from '@/lib/format'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell,
 } from 'recharts'
 import type { DailySpend, MonthlySpend, YearlySpend } from '@/types'
 
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899']
 
-function EmptyChart() {
-  return <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">No data for this period</div>
+function NoData() {
+  return (
+    <p className="text-sm text-muted-foreground py-8 text-center">
+      No data for this period
+    </p>
+  )
 }
 
-/** Format DailySpend for the bar chart (XAxis needs a string key) */
 function normDaily(data: DailySpend[]) {
-  return data.map((d) => ({ ...d, label: d.date }))
+  return data.map((d) => ({ ...d, label: d.date.slice(5) })) // show MM-DD
 }
-
-/** Format MonthlySpend for the bar chart */
 function normMonthly(data: MonthlySpend[]) {
-  return data.map((d) => ({ ...d, label: monthName(d.month) }))
+  return data.map((d) => ({ ...d, label: monthName(d.month).slice(0, 3) }))
 }
-
-/** Format YearlySpend for the bar chart */
 function normYearly(data: YearlySpend[]) {
   return data.map((d) => ({ ...d, label: String(d.year) }))
 }
@@ -66,7 +65,7 @@ export function AnalyticsPage() {
     enabled,
   })
 
-  const { data: members } = useQuery({
+  const { data: members, isLoading: membersLoading } = useQuery({
     queryKey: ['analytics', 'members', activeGroup?.id, year, month],
     queryFn: () => analyticsApi.members({ ...base, month }),
     enabled,
@@ -87,6 +86,7 @@ export function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header + date filters */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-semibold">Analytics</h1>
         <div className="flex gap-2">
@@ -111,154 +111,206 @@ export function AnalyticsPage() {
           <TabsTrigger value="insights">Insights</TabsTrigger>
         </TabsList>
 
-        {/* Category */}
+        {/* ── By Category ─────────────────────────────────────────── */}
         <TabsContent value="category" forceMount className="data-[state=inactive]:hidden">
           <Card>
             <CardHeader><CardTitle>Spending by Category — {monthName(month)} {year}</CardTitle></CardHeader>
             <CardContent>
-              {catLoading ? <Skeleton className="h-64 w-full" />
-                : !byCategory?.length ? <EmptyChart />
-                : (
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div style={{ width: '100%', height: 260 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={byCategory} dataKey="amount" nameKey="category_name" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`}>
-                            {byCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="space-y-2">
-                      {byCategory.map((c, i) => (
-                        <div key={c.category_id ?? 'none'} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                            <span className="text-sm">{c.category_name ?? 'Uncategorized'}</span>
+              {catLoading
+                ? <Skeleton className="h-48 w-full" />
+                : !byCategory?.length
+                  ? <NoData />
+                  : (
+                    <div className="grid md:grid-cols-2 gap-6 items-start">
+                      {/* Pie chart — only rendered when there is data */}
+                      <div style={{ width: '100%', height: 260 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={byCategory}
+                              dataKey="amount"
+                              nameKey="category_name"
+                              cx="50%" cy="50%"
+                              outerRadius={90}
+                              label={({ percent }: { percent?: number }) =>
+                                percent && percent > 0.04 ? `${((percent) * 100).toFixed(0)}%` : ''}
+                            >
+                              {byCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      {/* Legend table */}
+                      <div className="space-y-2">
+                        {byCategory.map((c, i) => (
+                          <div key={c.category_id ?? 'none'} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="h-3 w-3 rounded-full shrink-0"
+                                style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                              <span>{c.category_name ?? 'Uncategorized'}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-medium">{formatINR(c.amount)}</span>
+                              <span className="text-xs text-muted-foreground ml-2">({c.count})</span>
+                            </div>
                           </div>
-                          <span className="text-sm font-medium">{formatINR(c.amount)}</span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Daily */}
+        {/* ── Daily ─────────────────────────────────────────────────── */}
         <TabsContent value="daily" forceMount className="data-[state=inactive]:hidden">
           <Card>
             <CardHeader><CardTitle>Daily Spending — {monthName(month)} {year}</CardTitle></CardHeader>
             <CardContent>
-              {dayLoading ? <Skeleton className="h-64 w-full" />
-                : !byDay?.length ? <EmptyChart />
-                : (
-                  <div style={{ width: '100%', height: 260 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={normDaily(byDay)}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
-                        <Legend />
-                        <Bar dataKey="shared" name="Shared" fill="#3b82f6" />
-                        <Bar dataKey="personal" name="Personal" fill="#22c55e" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
+              {dayLoading
+                ? <Skeleton className="h-48 w-full" />
+                : !byDay?.length
+                  ? <NoData />
+                  : (
+                    <div style={{ width: '100%', height: 260 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={normDaily(byDay)} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} width={40} />
+                          <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
+                          <Bar dataKey="shared" name="Shared" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="personal" name="Personal" fill="#22c55e" radius={[2, 2, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Monthly */}
+        {/* ── Monthly ───────────────────────────────────────────────── */}
         <TabsContent value="monthly" forceMount className="data-[state=inactive]:hidden">
           <Card>
             <CardHeader><CardTitle>Monthly Spending — {year}</CardTitle></CardHeader>
             <CardContent>
-              {monthLoading ? <Skeleton className="h-64 w-full" />
-                : !byMonth?.length ? <EmptyChart />
-                : (
-                  <div style={{ width: '100%', height: 260 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={normMonthly(byMonth)}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
-                        <Legend />
-                        <Bar dataKey="shared" name="Shared" fill="#3b82f6" />
-                        <Bar dataKey="personal" name="Personal" fill="#22c55e" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
+              {monthLoading
+                ? <Skeleton className="h-48 w-full" />
+                : !byMonth?.length
+                  ? <NoData />
+                  : (
+                    <div style={{ width: '100%', height: 260 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={normMonthly(byMonth)} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} width={40} />
+                          <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
+                          <Bar dataKey="shared" name="Shared" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="personal" name="Personal" fill="#22c55e" radius={[2, 2, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Yearly */}
+        {/* ── Yearly ────────────────────────────────────────────────── */}
         <TabsContent value="yearly" forceMount className="data-[state=inactive]:hidden">
           <Card>
             <CardHeader><CardTitle>Yearly Overview</CardTitle></CardHeader>
             <CardContent>
-              {yearLoading ? <Skeleton className="h-64 w-full" />
-                : !byYear?.length ? <EmptyChart />
-                : (
-                  <div style={{ width: '100%', height: 260 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={normYearly(byYear)}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
-                        <Legend />
-                        <Bar dataKey="shared" name="Shared" fill="#3b82f6" />
-                        <Bar dataKey="personal" name="Personal" fill="#22c55e" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
+              {yearLoading
+                ? <Skeleton className="h-48 w-full" />
+                : !byYear?.length
+                  ? <NoData />
+                  : (
+                    <div style={{ width: '100%', height: 260 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={normYearly(byYear)} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} width={40} />
+                          <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
+                          <Bar dataKey="shared" name="Shared" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="personal" name="Personal" fill="#22c55e" radius={[2, 2, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Members */}
+        {/* ── Members breakdown table ───────────────────────────────── */}
         <TabsContent value="members" forceMount className="data-[state=inactive]:hidden">
           <Card>
-            <CardHeader><CardTitle>Member Contributions — {monthName(month)} {year}</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Spending by Member — {monthName(month)} {year}</CardTitle></CardHeader>
             <CardContent>
-              {!members?.length
-                ? <EmptyChart />
-                : (
-                  <div className="space-y-4">
-                    {members.map((m) => (
-                      <div key={m.user_id} className="space-y-1">
-                        <div className="flex justify-between text-sm">
-                          <span className="font-medium">{m.display_name ?? m.user_id}</span>
-                        </div>
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Shared paid: {formatINR(m.paid)}</span>
-                          <span>Personal total: {formatINR(m.personal_spent)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {membersLoading
+                ? <Skeleton className="h-32 w-full" />
+                : !members?.length
+                  ? <NoData />
+                  : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-muted-foreground text-xs">
+                            <th className="text-left py-2 pr-4 font-medium">Member</th>
+                            <th className="text-right py-2 px-4 font-medium">Shared Paid</th>
+                            <th className="text-right py-2 px-4 font-medium">Personal</th>
+                            <th className="text-right py-2 pl-4 font-medium">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {members.map((m) => {
+                            const total = m.paid + m.personal_spent
+                            return (
+                              <tr key={m.user_id} className="border-b last:border-0">
+                                <td className="py-2.5 pr-4 font-medium">
+                                  {m.display_name ?? m.user_id}
+                                </td>
+                                <td className="py-2.5 px-4 text-right tabular-nums">{formatINR(m.paid)}</td>
+                                <td className="py-2.5 px-4 text-right tabular-nums text-muted-foreground">{formatINR(m.personal_spent)}</td>
+                                <td className="py-2.5 pl-4 text-right tabular-nums font-semibold">{formatINR(total)}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t text-xs text-muted-foreground">
+                            <td className="py-2 pr-4">Total</td>
+                            <td className="py-2 px-4 text-right tabular-nums font-medium">
+                              {formatINR(members.reduce((s, m) => s + m.paid, 0))}
+                            </td>
+                            <td className="py-2 px-4 text-right tabular-nums font-medium">
+                              {formatINR(members.reduce((s, m) => s + m.personal_spent, 0))}
+                            </td>
+                            <td className="py-2 pl-4 text-right tabular-nums font-semibold">
+                              {formatINR(members.reduce((s, m) => s + m.paid + m.personal_spent, 0))}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Insights */}
+        {/* ── Insights ──────────────────────────────────────────────── */}
         <TabsContent value="insights" forceMount className="data-[state=inactive]:hidden">
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
               <CardHeader><CardTitle className="text-base">Highest Category</CardTitle></CardHeader>
               <CardContent>
                 {insights?.highest_category
-                  ? <><p className="text-xl font-bold">{insights.highest_category.name ?? '—'}</p><p className="text-muted-foreground text-sm">{formatINR(insights.highest_category.amount)}</p></>
+                  ? <>
+                      <p className="text-xl font-bold">{insights.highest_category.name ?? '—'}</p>
+                      <p className="text-muted-foreground text-sm">{formatINR(insights.highest_category.amount)}</p>
+                    </>
                   : <p className="text-sm text-muted-foreground">No data</p>}
               </CardContent>
             </Card>
@@ -266,23 +318,28 @@ export function AnalyticsPage() {
               <CardHeader><CardTitle className="text-base">Highest Day</CardTitle></CardHeader>
               <CardContent>
                 {insights?.highest_day
-                  ? <><p className="text-xl font-bold">{insights.highest_day.date ?? '—'}</p><p className="text-muted-foreground text-sm">{formatINR(insights.highest_day.amount)}</p></>
+                  ? <>
+                      <p className="text-xl font-bold">{insights.highest_day.date ?? '—'}</p>
+                      <p className="text-muted-foreground text-sm">{formatINR(insights.highest_day.amount)}</p>
+                    </>
                   : <p className="text-sm text-muted-foreground">No data</p>}
               </CardContent>
             </Card>
             <Card className="sm:col-span-2">
               <CardHeader><CardTitle className="text-base">Top 5 Transactions</CardTitle></CardHeader>
               <CardContent>
-                {!insights?.largest_transactions.length
+                {!insights?.largest_transactions?.length
                   ? <p className="text-sm text-muted-foreground">No data</p>
-                  : <div className="space-y-2">
-                    {insights.largest_transactions.map((tx) => (
-                      <div key={tx.id} className="flex justify-between text-sm">
-                        <span className="truncate max-w-[60%]">{tx.description}</span>
-                        <span className="font-medium">{formatINR(tx.amount)}</span>
-                      </div>
-                    ))}
-                  </div>}
+                  : (
+                    <div className="space-y-2">
+                      {insights.largest_transactions.map((tx) => (
+                        <div key={tx.id} className="flex justify-between text-sm">
+                          <span className="truncate max-w-[60%]">{tx.description}</span>
+                          <span className="font-medium">{formatINR(tx.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
               </CardContent>
             </Card>
             {insights?.trend && (

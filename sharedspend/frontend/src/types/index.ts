@@ -149,6 +149,7 @@ export interface TransactionCreate {
   group_id?: string | null
   payer_id?: string | null
   notes?: string | null
+  add_to_settlement?: boolean
 }
 
 export interface TransactionUpdate {
@@ -160,6 +161,7 @@ export interface TransactionUpdate {
   group_id?: string | null
   payer_id?: string | null
   notes?: string | null
+  add_to_settlement?: boolean
 }
 
 /** Matches backend TransactionOut exactly */
@@ -175,6 +177,7 @@ export interface TransactionOut {
   recorded_by_id: string
   suggested_category_id: string | null
   notes: string | null
+  add_to_settlement: boolean
   is_deleted: boolean
   created_at: string
   updated_at: string
@@ -302,4 +305,26 @@ export interface ForecastOut {
   on_track: boolean | null
   days_elapsed: number
   days_in_month: number
+}
+
+// ─── Settlement ───────────────────────────────────────────────────────────────
+export type SettlementStatus = 'PENDING' | 'SETTLED'
+
+/** Calculated transfer (not persisted) returned by /settlements/groups/{id}/calculate */
+export interface SettlementTransfer {
+  from_user_id: string
+  to_user_id: string
+  amount: number
+}
+
+/** Persisted settlement record from the backend */
+export interface SettlementRecordOut {
+  id: string
+  group_id: string
+  from_user_id: string
+  to_user_id: string
+  amount: number
+  status: SettlementStatus
+  settled_at: string | null
+  created_at: string
 }

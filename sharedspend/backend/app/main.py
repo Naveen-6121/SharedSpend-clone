@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, budgets, categories, categorizer, groups, transactions, users, analytics
+from app.api import auth, budgets, categories, categorizer, groups, transactions, users, analytics, settlements
 from app.api.categories import seed_global_categories
 from app.config import settings
 from app.db.engine import AsyncSessionLocal, engine
@@ -52,6 +52,7 @@ app.include_router(categories.router, prefix=PREFIX)
 app.include_router(transactions.router, prefix=PREFIX)
 app.include_router(categorizer.router, prefix=PREFIX)
 app.include_router(analytics.router, prefix=PREFIX)
+app.include_router(settlements.router, prefix=PREFIX)
 
 
 @app.get("/health")

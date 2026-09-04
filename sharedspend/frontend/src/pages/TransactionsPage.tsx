@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PlusCircle, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useGroup } from '@/context/GroupContext'
 import { useAuth } from '@/context/AuthContext'
 import { useDeleteTransaction, useTransactions } from '@/hooks/useApi'
 import { useCategories } from '@/hooks/useApi'
+import { groupsApi } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -68,6 +70,16 @@ export function TransactionsPage() {
   // Build category lookup map for export
   const categoryMap: Record<string, string> = {}
   categories?.forEach((c) => { categoryMap[c.id] = c.name })
+
+  // Fetch group members to resolve user IDs → display names
+  const { data: members = [] } = useQuery({
+    queryKey: ['group-members', activeGroup?.id],
+    queryFn: () => groupsApi.members(activeGroup!.id),
+    enabled: !!activeGroup,
+  })
+  // user_id → display name map for badge labels
+  const memberMap: Record<string, string> = {}
+  members.forEach((m) => { memberMap[m.user_id] = m.display_name || m.username || m.user_id })
 
   const handleExport = async (format: 'xlsx' | 'csv') => {
     if (!activeGroup) { toast.error('No active group selected'); return }
@@ -193,6 +205,7 @@ export function TransactionsPage() {
                 key={tx.id}
                 tx={tx}
                 isOwn={tx.recorded_by_id === user?.id}
+                memberMap={memberMap}
                 onEdit={() => navigate(`/transactions/${tx.id}/edit`)}
                 onDelete={() => setDeleteId(tx.id)}
               />
@@ -243,8 +256,19 @@ export function TransactionsPage() {
 }
 
 function TransactionRow({
-  tx, isOwn, onEdit, onDelete,
-}: { tx: TransactionOut; isOwn: boolean; onEdit: () => void; onDelete: () => void }) {
+  tx, isOwn, onEdit, onDelete, memberMap,
+}: {
+  tx: TransactionOut
+  isOwn: boolean
+  memberMap: Record<string, string>
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  // Personal transactions: show who recorded it; Shared: show "Shared"
+  const typeLabel = tx.type === 'SHARED'
+    ? 'Shared'
+    : (memberMap[tx.recorded_by_id] ?? 'Personal')
+
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b last:border-0 hover:bg-muted/30 transition-colors"
       role="listitem">
@@ -262,7 +286,7 @@ function TransactionRow({
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <Badge variant={tx.type === 'SHARED' ? 'default' : 'secondary'}>
-          {tx.type === 'SHARED' ? 'Shared' : 'Personal'}
+          {typeLabel}
         </Badge>
         <span className="text-sm font-semibold w-24 text-right tabular-nums">{formatINR(tx.amount)}</span>
         {isOwn && (

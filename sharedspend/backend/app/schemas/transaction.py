@@ -7,6 +7,13 @@ from typing import Optional
 from pydantic import BaseModel, field_validator
 
 
+def _coerce_empty_to_none(v: Optional[str]) -> Optional[str]:
+    """Treat empty string as None for optional ID fields (prevents '' being sent as UUID)."""
+    if v == "":
+        return None
+    return v
+
+
 class TransactionCreate(BaseModel):
     date: date
     amount: Decimal
@@ -17,6 +24,7 @@ class TransactionCreate(BaseModel):
     category_id: Optional[str] = None
     suggested_category_id: Optional[str] = None
     notes: Optional[str] = None
+    add_to_settlement: bool = False
 
     @field_validator("type")
     @classmethod
@@ -32,6 +40,13 @@ class TransactionCreate(BaseModel):
             raise ValueError("amount must be positive")
         return v
 
+    @field_validator("payer_id", "group_id", "category_id", "suggested_category_id", mode="before")
+    @classmethod
+    def empty_to_none(cls, v: object) -> object:
+        if v == "":
+            return None
+        return v
+
 
 class TransactionUpdate(BaseModel):
     date: Optional[date] = None
@@ -43,12 +58,20 @@ class TransactionUpdate(BaseModel):
     category_id: Optional[str] = None
     suggested_category_id: Optional[str] = None
     notes: Optional[str] = None
+    add_to_settlement: Optional[bool] = None
 
     @field_validator("type")
     @classmethod
     def validate_type(cls, v: str | None) -> str | None:
         if v is not None and v not in ("SHARED", "PERSONAL"):
             raise ValueError("type must be SHARED or PERSONAL")
+        return v
+
+    @field_validator("payer_id", "group_id", "category_id", "suggested_category_id", mode="before")
+    @classmethod
+    def empty_to_none(cls, v: object) -> object:
+        if v == "":
+            return None
         return v
 
 
@@ -64,6 +87,7 @@ class TransactionOut(BaseModel):
     category_id: Optional[str]
     suggested_category_id: Optional[str]
     notes: Optional[str]
+    add_to_settlement: bool
     is_deleted: bool
     created_at: datetime
     updated_at: datetime

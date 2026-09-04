@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, ArrowLeftRight, BarChart2, Settings, LogOut, ChevronDown, PlusCircle, Check
+  LayoutDashboard, ArrowLeftRight, BarChart2, Settings, LogOut, ChevronDown, PlusCircle, Check, Scale
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/context/AuthContext'
@@ -21,6 +21,7 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/transactions', icon: ArrowLeftRight, label: 'Transactions' },
   { to: '/analytics', icon: BarChart2, label: 'Analytics' },
+  { to: '/settlement', icon: Scale, label: 'Settlement' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 

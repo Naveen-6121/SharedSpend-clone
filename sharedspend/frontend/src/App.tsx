@@ -12,6 +12,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { TransactionsPage } from '@/pages/TransactionsPage'
 import { TransactionFormPage } from '@/pages/TransactionFormPage'
 import { AnalyticsPage } from '@/pages/AnalyticsPage'
+import { SettlementPage } from '@/pages/SettlementPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { GroupSettingsPage, CreateGroupPage } from '@/pages/GroupPages'
 import { CategoriesPage } from '@/pages/CategoriesPage'
@@ -41,6 +42,7 @@ function AuthenticatedApp() {
           <Route path="/transactions/new" element={<TransactionFormPage />} />
           <Route path="/transactions/:id/edit" element={<TransactionFormPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/settlement" element={<SettlementPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/group" element={<GroupSettingsPage />} />
           <Route path="/settings/categories" element={<CategoriesPage />} />

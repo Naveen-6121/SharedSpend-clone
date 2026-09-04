@@ -191,7 +191,7 @@ export function GroupSettingsPage() {
               {budget && <p className="text-sm text-muted-foreground mb-3">Current: <strong>{formatINR(budget.amount)}</strong></p>}
               {isOwner && (
                 <form onSubmit={budgetForm.handleSubmit((d) => budgetMutation.mutate(d))} className="flex gap-2">
-                  <Input type="number" min="1" step="100" placeholder="Amount (₹)" className="flex-1"
+                  <Input type="number" min="0.01" step="0.01" placeholder="Amount (₹)" className="flex-1"
                     {...budgetForm.register('amount')} />
                   <Button type="submit" loading={budgetMutation.isPending}>
                     {budget ? 'Update' : 'Set Budget'}

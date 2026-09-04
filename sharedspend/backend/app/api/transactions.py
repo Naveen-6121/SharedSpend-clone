@@ -34,20 +34,20 @@ async def create_transaction(
     current_user: User = Depends(get_current_user),
 ):
     if payload.type == "SHARED":
+        # SHARED: requires group_id, payer_id must be NULL
         if not payload.group_id:
             raise HTTPException(status_code=422, detail="group_id required for SHARED transactions")
-        if not payload.payer_id:
-            raise HTTPException(status_code=422, detail="payer_id required for SHARED transactions")
+        if payload.payer_id is not None:
+            raise HTTPException(status_code=422, detail="payer_id must be null for SHARED transactions")
         if not await _check_group_member(db, payload.group_id, current_user.id):
             raise HTTPException(status_code=403, detail="Not a member of this group")
-        if not await _check_group_member(db, payload.group_id, payload.payer_id):
-            raise HTTPException(status_code=422, detail="payer_id must be a group member")
 
     elif payload.type == "PERSONAL":
+        # PERSONAL: group_id must be NULL, payer_id REQUIRED
         if payload.group_id is not None:
             raise HTTPException(status_code=422, detail="group_id must be null for PERSONAL transactions")
-        if payload.payer_id is not None:
-            raise HTTPException(status_code=422, detail="payer_id must be null for PERSONAL transactions")
+        if not payload.payer_id:
+            raise HTTPException(status_code=422, detail="payer_id required for PERSONAL transactions")
 
     txn = Transaction(
         date=payload.date,
@@ -60,6 +60,7 @@ async def create_transaction(
         category_id=payload.category_id,
         suggested_category_id=payload.suggested_category_id,
         notes=payload.notes,
+        add_to_settlement=payload.add_to_settlement,
     )
     db.add(txn)
     await db.commit()
@@ -185,22 +186,26 @@ async def update_transaction(
     new_type = payload.type if payload.type is not None else txn.type
 
     if new_type == "SHARED":
+        # SHARED: group required, payer must be null
         new_group_id = payload.group_id if payload.group_id is not None else txn.group_id
-        new_payer_id = payload.payer_id if payload.payer_id is not None else txn.payer_id
         if not new_group_id:
             raise HTTPException(status_code=422, detail="group_id required for SHARED")
-        if not new_payer_id:
-            raise HTTPException(status_code=422, detail="payer_id required for SHARED")
+        # If payload explicitly sends payer_id it must be None for SHARED
+        if payload.payer_id is not None:
+            raise HTTPException(status_code=422, detail="payer_id must be null for SHARED transactions")
         if not await _check_group_member(db, new_group_id, current_user.id):
             raise HTTPException(status_code=403, detail="Not a member of the group")
-        if not await _check_group_member(db, new_group_id, new_payer_id):
-            raise HTTPException(status_code=422, detail="payer_id must be a group member")
         txn.group_id = new_group_id
-        txn.payer_id = new_payer_id
+        txn.payer_id = None  # SHARED never has a payer
+
     elif new_type == "PERSONAL":
-        # SHARED → PERSONAL: clear group and payer
+        # PERSONAL: no group, payer required
+        # Use payload payer_id if provided, else keep existing payer for PERSONAL
+        new_payer_id = payload.payer_id if payload.payer_id is not None else txn.payer_id
+        if not new_payer_id:
+            raise HTTPException(status_code=422, detail="payer_id required for PERSONAL transactions")
         txn.group_id = None
-        txn.payer_id = None
+        txn.payer_id = new_payer_id
 
     txn.type = new_type
 
@@ -212,10 +217,15 @@ async def update_transaction(
         txn.description = payload.description
     if payload.category_id is not None:
         txn.category_id = payload.category_id
+    elif "category_id" in (payload.model_fields_set or set()):
+        # explicitly set to None
+        txn.category_id = None
     if payload.suggested_category_id is not None:
         txn.suggested_category_id = payload.suggested_category_id
     if payload.notes is not None:
         txn.notes = payload.notes
+    if payload.add_to_settlement is not None:
+        txn.add_to_settlement = payload.add_to_settlement
 
     db.add(txn)
     await db.commit()
