@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date as date_type, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -15,7 +15,7 @@ def _coerce_empty_to_none(v: Optional[str]) -> Optional[str]:
 
 
 class TransactionCreate(BaseModel):
-    date: date
+    date: date_type
     amount: Decimal
     description: str
     type: str  # SHARED | PERSONAL
@@ -49,7 +49,7 @@ class TransactionCreate(BaseModel):
 
 
 class TransactionUpdate(BaseModel):
-    date: Optional[date] = None
+    date: Optional[date_type] = None
     amount: Optional[Decimal] = None
     description: Optional[str] = None
     type: Optional[str] = None
@@ -77,7 +77,7 @@ class TransactionUpdate(BaseModel):
 
 class TransactionOut(BaseModel):
     id: str
-    date: date
+    date: date_type
     amount: Decimal
     description: str
     type: str
@@ -100,11 +100,11 @@ class TransactionListParams(BaseModel):
     type: Optional[str] = None
     category_id: Optional[str] = None
     payer_id: Optional[str] = None
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    date_from: Optional[date_type] = None
+    date_to: Optional[date_type] = None
     year: Optional[int] = None
     month: Optional[int] = None
     week: Optional[int] = None
-    date: Optional[date] = None
+    date: Optional[date_type] = None
     page: int = 1
     page_size: int = 20
