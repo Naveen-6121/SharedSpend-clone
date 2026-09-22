@@ -112,7 +112,7 @@ export function AnalyticsPage() {
         </TabsList>
 
         {/* ── By Category ─────────────────────────────────────────── */}
-        <TabsContent value="category" forceMount className="data-[state=inactive]:hidden">
+        <TabsContent value="category" className="data-[state=inactive]:hidden">
           <Card>
             <CardHeader><CardTitle>Spending by Category — {monthName(month)} {year}</CardTitle></CardHeader>
             <CardContent>
@@ -123,23 +123,62 @@ export function AnalyticsPage() {
                   : (
                     <div className="grid md:grid-cols-2 gap-6 items-start">
                       {/* Pie chart — only rendered when there is data */}
-                      <div style={{ width: '100%', height: 260 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={byCategory}
-                              dataKey="amount"
-                              nameKey="category_name"
-                              cx="50%" cy="50%"
-                              outerRadius={90}
-                              label={({ percent }: { percent?: number }) =>
-                                percent && percent > 0.04 ? `${((percent) * 100).toFixed(0)}%` : ''}
-                            >
-                              {byCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                            </Pie>
-                            <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
-                          </PieChart>
-                        </ResponsiveContainer>
+                      <div className="w-full h-[300px] min-w-0 flex items-center justify-center">
+                        <PieChart width={300} height={260}>
+                          <Pie
+                            data={byCategory.map((item) => ({
+                              ...item,
+                              amount: Number(item.amount),
+                            }))}
+                            dataKey="amount"
+                            nameKey="category_name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={105}
+                            labelLine={false}
+                            label={({ percent, cx, cy, midAngle, outerRadius }: {
+                              percent?: number
+                              cx?: number
+                              cy?: number
+                              midAngle?: number
+                              outerRadius?: number
+                            }) => {
+                              if (
+                                percent == null ||
+                                cx == null ||
+                                cy == null ||
+                                midAngle == null ||
+                                outerRadius == null
+                              ) {
+                                return null
+                              }
+
+                              const radius = outerRadius * 0.62
+                              const angle = (-midAngle * Math.PI) / 180
+                              const x = cx + radius * Math.cos(angle)
+                              const y = cy + radius * Math.sin(angle)
+
+                              return (
+                                <text
+                                  x={x}
+                                  y={y}
+                                  textAnchor="middle"
+                                  dominantBaseline="central"
+                                  fill="#ffffff"
+                                  fontSize={16}
+                                  fontWeight={600}
+                                >
+                                  {`${(percent * 100).toFixed(0)}%`}
+                                </text>
+                              )
+                            }}
+                          >
+                            {byCategory.map((_, i) => (
+                              <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(v: unknown) => formatINR(v as number)} />
+                        </PieChart>
                       </div>
                       {/* Legend table */}
                       <div className="space-y-2">
@@ -164,7 +203,7 @@ export function AnalyticsPage() {
         </TabsContent>
 
         {/* ── Daily ─────────────────────────────────────────────────── */}
-        <TabsContent value="daily" forceMount className="data-[state=inactive]:hidden">
+        <TabsContent value="daily" className="data-[state=inactive]:hidden">
           <Card>
             <CardHeader><CardTitle>Daily Spending — {monthName(month)} {year}</CardTitle></CardHeader>
             <CardContent>
@@ -191,7 +230,7 @@ export function AnalyticsPage() {
         </TabsContent>
 
         {/* ── Monthly ───────────────────────────────────────────────── */}
-        <TabsContent value="monthly" forceMount className="data-[state=inactive]:hidden">
+        <TabsContent value="monthly" className="data-[state=inactive]:hidden">
           <Card>
             <CardHeader><CardTitle>Monthly Spending — {year}</CardTitle></CardHeader>
             <CardContent>
@@ -218,7 +257,7 @@ export function AnalyticsPage() {
         </TabsContent>
 
         {/* ── Yearly ────────────────────────────────────────────────── */}
-        <TabsContent value="yearly" forceMount className="data-[state=inactive]:hidden">
+        <TabsContent value="yearly" className="data-[state=inactive]:hidden">
           <Card>
             <CardHeader><CardTitle>Yearly Overview</CardTitle></CardHeader>
             <CardContent>

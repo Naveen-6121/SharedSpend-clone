@@ -286,25 +286,25 @@ export function TransactionFormPage() {
             {txType === 'PERSONAL' && (
               <div className="space-y-1">
                 <Label htmlFor="payer">Paid by *</Label>
-                <Select
+                <select
+                  id="payer"
                   value={watch('payer_id') ?? ''}
-                  onValueChange={(v) => setValue('payer_id', v || null)}
+                  onChange={(e) => setValue('payer_id', e.target.value || null)}
+                  aria-required="true"
+                  aria-describedby={errors.payer_id ? 'payer-error' : undefined}
+                  className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <SelectTrigger id="payer" aria-required="true"
-                    aria-describedby={errors.payer_id ? 'payer-error' : undefined}>
-                    <SelectValue placeholder="Who paid?" />
-                  </SelectTrigger>
-                  <SelectContent>
+                  <option value="">
                     {!members?.length
-                      ? <SelectItem value="_none" disabled>No group members — join a group first</SelectItem>
-                      : members.map((m) => (
-                        <SelectItem key={m.user_id} value={m.user_id}>
-                          {m.display_name || m.username || m.user_id}
-                        </SelectItem>
-                      ))
-                    }
-                  </SelectContent>
-                </Select>
+                      ? 'No group members — join a group first'
+                      : 'Who paid?'}
+                  </option>
+                  {members?.map((m) => (
+                    <option key={m.user_id} value={m.user_id}>
+                      {m.display_name || m.username || m.user_id}
+                    </option>
+                  ))}
+                </select>
                 {errors.payer_id && (
                   <p id="payer-error" className="text-xs text-destructive" role="alert">{errors.payer_id.message}</p>
                 )}
@@ -375,22 +375,22 @@ export function TransactionFormPage() {
             {/* Category */}
             <div className="space-y-1">
               <Label htmlFor="category">Category</Label>
-              <Select
+              <select
+                id="category"
                 value={watch('category_id') ?? ''}
-                onValueChange={(v) => { setValue('category_id', v || null); setSuggestion(null) }}
+                onChange={(e) => {
+                  setValue('category_id', e.target.value || null)
+                  setSuggestion(null)
+                }}
+                className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <SelectTrigger id="category">
-                  <SelectValue placeholder="Select category (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">None</SelectItem>
-                  {categories?.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      <span className="mr-2" aria-hidden="true">{c.icon}</span>{c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <option value="">Select category (optional)</option>
+                {categories?.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.icon} {c.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Notes */}

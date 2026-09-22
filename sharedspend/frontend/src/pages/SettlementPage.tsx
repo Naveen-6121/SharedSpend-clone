@@ -59,6 +59,9 @@ export function SettlementPage() {
       settlementsApi.create(activeGroup!.id, t.from_user_id, t.to_user_id, t.amount),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settlement-records', activeGroup?.id] })
+      queryClient.invalidateQueries({
+        queryKey: ['settlement-calculate', activeGroup?.id, year, month],
+      })
     },
   })
 
@@ -67,6 +70,9 @@ export function SettlementPage() {
     mutationFn: (id: string) => settlementsApi.settle(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settlement-records', activeGroup?.id] })
+      queryClient.invalidateQueries({
+        queryKey: ['settlement-calculate', activeGroup?.id, year, month],
+      })
     },
   })
 
@@ -75,6 +81,9 @@ export function SettlementPage() {
     mutationFn: (id: string) => settlementsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settlement-records', activeGroup?.id] })
+      queryClient.invalidateQueries({
+        queryKey: ['settlement-calculate', activeGroup?.id, year, month],
+      })
     },
   })
 
@@ -84,10 +93,38 @@ export function SettlementPage() {
   const pendingRecords = records.filter((r) => r.status === 'PENDING')
   const settledRecords = records.filter((r) => r.status === 'SETTLED')
 
+  // Exclude calculated transfers that have already been settled.
+  const settledRecordsForPeriod = settledRecords.filter((r) => {
+    const recordDate = new Date(r.created_at)
+    return (
+      recordDate.getFullYear() === year &&
+      recordDate.getMonth() + 1 === month
+    )
+  })
+
+  const outstandingTransfers = transfers.flatMap((transfer) => {
+    const settledAmount = settledRecordsForPeriod
+      .filter(
+        (record) =>
+          record.from_user_id === transfer.from_user_id &&
+          record.to_user_id === transfer.to_user_id
+      )
+      .reduce((sum, record) => sum + Number(record.amount), 0)
+
+    const remaining = Number(transfer.amount) - settledAmount
+
+    return remaining > 0.009
+      ? [{ ...transfer, amount: remaining }]
+      : []
+  })
+
   // Transfers that haven't been persisted yet
-  const unpersisted = transfers.filter(
+  const unpersisted = outstandingTransfers.filter(
     (t) => !pendingRecords.some(
-      (r) => r.from_user_id === t.from_user_id && r.to_user_id === t.to_user_id
+      (r) =>
+        r.from_user_id === t.from_user_id &&
+        r.to_user_id === t.to_user_id &&
+        Math.abs(Number(r.amount) - Number(t.amount)) < 0.01
     )
   )
 
@@ -132,7 +169,7 @@ export function SettlementPage() {
             <div className="space-y-2">
               {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}
             </div>
-          ) : transfers.length === 0 ? (
+          ) : outstandingTransfers.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No personal expenses marked for settlement this period.
               <br />
@@ -142,12 +179,12 @@ export function SettlementPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Transfers to settle</span>
-                <span className="font-semibold">{transfers.length}</span>
+                <span className="font-semibold">{outstandingTransfers.length}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total to settle</span>
                 <span className="font-semibold">
-                  {formatINR(transfers.reduce((s, t) => s + t.amount, 0))}
+                  {formatINR(outstandingTransfers.reduce((s, t) => s + t.amount, 0))}
                 </span>
               </div>
               <Separator />
