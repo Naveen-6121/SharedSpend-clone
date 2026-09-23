@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { PlusCircle, ArrowLeftRight, Users } from 'lucide-react'
+import { PlusCircle, Users } from 'lucide-react'
 import { useGroup } from '@/context/GroupContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -201,6 +201,13 @@ export function DashboardPage() {
     enabled,
   })
 
+  // Spending forecast: projected month-end spend for current group+period
+  const { data: forecast } = useQuery({
+    queryKey: ['analytics', 'forecast', activeGroup?.id, year, month],
+    queryFn: () => analyticsApi.forecast(params),
+    enabled,
+  })
+
   // Analytics members: personal spending per member for current group+period
   const { data: memberStats = [] } = useQuery({
     queryKey: ['analytics', 'members', activeGroup?.id, year, month],
@@ -261,22 +268,60 @@ export function DashboardPage() {
           month={month}
         />
 
-        {/* 2. Shared Spent card */}
+        {/* 2. Spending Forecast card */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Shared Spent</CardTitle>
-              <ArrowLeftRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Spending Forecast
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">This month</span>
             </div>
           </CardHeader>
+
           <CardContent>
-            {sumLoading
-              ? <Skeleton className="h-6 w-24" />
-              : <>
-                  <p className="text-xl font-bold tabular-nums">{formatINR(summary?.shared_spent ?? 0)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Group expenses this month</p>
-                </>
-            }
+            {!forecast ? (
+              <Skeleton className="h-6 w-28" />
+            ) : (
+              <>
+                <p className="text-xl font-bold tabular-nums">
+                  {forecast.projected_spend != null
+                    ? formatINR(forecast.projected_spend)
+                    : '—'}
+                </p>
+
+                <p className="text-xs text-muted-foreground mt-1">
+                  Projected month-end spend
+                </p>
+
+                <div className="flex justify-between text-xs mt-3 pt-2 border-t">
+                  <span className="text-muted-foreground">
+                    Budget:{' '}
+                    {forecast.budget != null
+                      ? formatINR(forecast.budget)
+                      : 'Not set'}
+                  </span>
+
+                  <span
+                    className={
+                      forecast.on_track === false
+                        ? 'text-red-600 font-medium'
+                        : 'text-green-600 font-medium'
+                    }
+                  >
+                    {forecast.on_track == null
+                      ? 'No budget'
+                      : forecast.on_track
+                        ? 'Within budget'
+                        : 'Above budget'}
+                  </span>
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-2">
+                  {forecast.days_elapsed} of {forecast.days_in_month} days elapsed
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 

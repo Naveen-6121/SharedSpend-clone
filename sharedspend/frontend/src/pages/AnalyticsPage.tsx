@@ -71,6 +71,12 @@ export function AnalyticsPage() {
     enabled,
   })
 
+  const { data: forecast } = useQuery({
+    queryKey: ['analytics', 'forecast', activeGroup?.id, year, month],
+    queryFn: () => analyticsApi.forecast({ ...base, month }),
+    enabled,
+  })
+
   const { data: insights } = useQuery({
     queryKey: ['analytics', 'insights', activeGroup?.id, year, month],
     queryFn: () => analyticsApi.insights({ ...base, month }),
@@ -341,6 +347,36 @@ export function AnalyticsPage() {
 
         {/* ── Insights ──────────────────────────────────────────────── */}
         <TabsContent value="insights" forceMount className="data-[state=inactive]:hidden">
+          <Card className="mb-4">
+            <CardHeader><CardTitle className="text-base">Monthly Spending Forecast</CardTitle></CardHeader>
+            <CardContent>
+              {!forecast ? (
+                <p className="text-sm text-muted-foreground">No forecast data available</p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Projected Spend</p>
+                    <p className="text-xl font-bold">{forecast.projected_spend != null ? formatINR(forecast.projected_spend) : "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Budget</p>
+                    <p className="text-xl font-bold">{forecast.budget != null ? formatINR(forecast.budget) : "Not set"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Days Elapsed</p>
+                    <p className="text-xl font-bold">{forecast.days_elapsed} / {forecast.days_in_month}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Status</p>
+                    <p className="text-xl font-bold">
+                      {forecast.on_track == null ? "No budget set" : forecast.on_track ? "Within budget" : "Above budget"}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
               <CardHeader><CardTitle className="text-base">Highest Category</CardTitle></CardHeader>

@@ -9,6 +9,7 @@ import type {
   YearlySpend,
   MemberContribution,
   InsightsOut,
+  ForecastOut,
 } from '@/types'
 
 function clean(p: AnalyticsFilters): Record<string, string | number> {
@@ -41,4 +42,6 @@ export const analyticsApi = {
 
   insights: (params: AnalyticsFilters) =>
     apiClient.get<InsightsOut>('/analytics/insights', { params: clean(params) }).then((r) => r.data),
+  forecast: (params: AnalyticsFilters) =>
+    apiClient.get<ForecastOut>('/analytics/forecast', { params: clean(params) }).then((r) => r.data),
 }
