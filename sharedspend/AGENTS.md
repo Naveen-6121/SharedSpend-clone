@@ -8,7 +8,7 @@
 - Do not modify or push to the private master repository unless explicitly instructed.
 - Never force-push.
 - Do not commit changes unless explicitly requested.
-- Keep `Start_SharedSpend.bat` untracked.
+- `Start_SharedSpend.bat` is tracked at the repository root; keep it limited to relative project paths and local development startup settings. Do not remove it from version control unless explicitly requested.
 
 ## Before Making Changes
 

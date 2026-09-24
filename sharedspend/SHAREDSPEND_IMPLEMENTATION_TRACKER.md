@@ -6,8 +6,8 @@
 >
 > **Source:** Based on the existing `# SharedSpend — Implementation Plan.txt`,
 > the existing `sharedspend-handoff.docx`, and the implementation decisions
-> already made during development. Current status entries reflect the actual
-> progress known as of September 23, 2026.
+> already made during development. Current status entries reflect the latest
+> recorded implementation and validation as of September 24, 2026.
 
 ---
 
@@ -15,10 +15,15 @@
 
 Status values:
 
-- `[x]` **DONE** — implemented and validated.
-- `[~]` **IN PROGRESS** — currently being implemented.
-- `[ ]` **PENDING** — agreed, but not started.
-- `[!]` **BLOCKED / NEEDS DECISION** — requires a decision or dependency.
+- **IMPLEMENTED** — code exists. This alone does not establish that it works as intended.
+- **VERIFIED** — specific evidence is recorded (automated test, build, or named manual check); verification applies only to that evidence and scope.
+- `[x] DONE` — the scoped implementation and listed validation are complete; stated caveats remain visible.
+- `[~] IN PROGRESS` — implementation exists in whole or part, but a required check or decision remains open.
+- `[ ] PENDING` — implementation has not started, or the stated acceptance check remains open.
+- `[!] NEEDS DECISION` — scope or dependency requires an explicit decision.
+
+Record implementation status separately from verification evidence. A passing
+test does not verify an untested provider, browser flow, device, or deployment.
 
 For every completed feature, record:
 
@@ -41,13 +46,13 @@ Manual verification
     ↓
 Review git diff
     ↓
-Commit + push SharedSpend-clone
-    ↓
-Promote tested work to private SharedSpend master
+Review changes with the user
 ```
 
 **Repository rule:** `SharedSpend-clone` is the development repository. The
-private `SharedSpend` repository is the stable/master repository.
+private `SharedSpend` repository is the stable/master repository. Do not commit
+or push unless explicitly requested; the private repository is not part of the
+normal development workflow.
 
 ---
 
@@ -55,27 +60,24 @@ private `SharedSpend` repository is the stable/master repository.
 
 ## Environment / baseline
 
-- [x] Fresh `SharedSpend-clone` checkout on personal laptop
-- [x] Python 3.11.9 environment created
-- [x] Backend dependencies installed
-- [x] Backend tests pass: **66/66**
-- [x] Node.js v24.21.0 available
-- [x] npm 11.19.0 available
-- [x] Frontend dependencies installed
-- [x] Frontend production build passes
-- [ ] Frontend test suite run on personal laptop
-- [ ] Final Phase 2 regression suite
-- [ ] Production-readiness review
+- [x] Backend suite last recorded: **84 passed** on 2026-09-24.
+- [x] Frontend suite last recorded: **91 passed** on 2026-09-24.
+- [x] Frontend TypeScript/Vite production build passed; Vite reported a large main-chunk warning.
+- [x] Real-route API integration coverage exists for two users and two groups.
+- [ ] Full browser E2E and all remaining manual acceptance checks.
+- [ ] Live PostgreSQL/Neon integration and migration test.
 
-Current development baseline:
+Latest locally known repository baseline before this documentation update (the live GitHub remote could not be refreshed from this environment):
 
 ```text
 Branch: main
-Known baseline commit:
-506511b feat: add spending forecast to analytics and dashboard
-Working tree: clean at the time of baseline verification
+Local main/origin/main commit: 77f7183 docs: update backend environment example (live remote tip not independently refreshed)
+Application implementation commit: 18d6fe3 feat: update SharedSpend core features and UI
+Local ref: origin/main at 77f7183 (remote tip not independently refreshed)
+Working tree: clean before this documentation-only update
 ```
 
+The test results above are the latest recorded validation for the application changes. Documentation-only commit `77f7183` followed those checks; no application source changed after the application implementation commit.
 ---
 
 # 3. Phase 1 — MVP
@@ -105,9 +107,9 @@ rule-based categorization, dashboard, analytics, and basic tests.
 
 - [x] Multiple groups → Phase 2
 - [x] Settlement → Phase 2
-- [x] AI categorization → Phase 2
+- [x] Rule-based category suggestions → Phase 2
 - [x] Export → Phase 2
-- [x] Notifications → Phase 2
+- [x] In-app/browser budget alerts → Phase 2 (background delivery remains pending)
 - [x] Dark mode → Phase 2
 - [x] E2E testing → Phase 2 / quality gate
 
@@ -154,26 +156,20 @@ Known caveat:
 
 ---
 
-### 2.3 AI / LLM Categorization
+### 2.3 Rule-Based Category Suggestions (LLM not implemented)
 
-**Status:** `[x] DONE / IMPLEMENTED`
+**Status:** IMPLEMENTED; rule-based suggestion path VERIFIED by backend tests. LLM categorization is PENDING and is not represented by this status.
 
-Scope:
-- Replace/extend rule-based categorization through the existing
-  `CategorizerService` seam.
-- Preserve user override.
-- Keep existing categorization API compatibility.
+Scope completed:
+- Current categorization suggestions use the existing keyword/rule-based `CategorizerService`.
+- User-selected category remains authoritative, and existing API behavior is retained.
 
-Notes:
-- The original implementation plan explicitly designed `CategorizerService`
-  so an `LLMCategorizerService` could be introduced without changing the
-  router/frontend contract.
-- Confirm the exact provider/model and production credential strategy before
-  making provider-specific changes.
+Limit:
+- No LLM provider, model, prompt, or production credential flow is implemented. Do not describe the current categorizer as AI/LLM-powered. Any LLM categorization is future work and needs an explicit scope/provider decision.
 
 ---
 
-### 2.4 AI Spending Insights
+### 2.4 Analytics and Deterministic Spending Insights
 
 **Status:** `[x] DONE / CURRENT IMPLEMENTATION`
 
@@ -209,7 +205,7 @@ projected_spend =
 
 ### 2.5 CSV Export
 
-**Status:** `[~] IN PROGRESS — implementation and automated checks pass; browser download verification pending`
+**Status:** `[~] IN PROGRESS — implementation and automated checks verified; user-reported manual download check is recorded, independent browser/file inspection remains unverified`
 
 Planned scope:
 - Export filtered transactions as CSV.
@@ -236,19 +232,15 @@ Acceptance criteria:
 - [x] Backend tests — filtered export, authorization, empty output, headers, date and decimal amounts
 - [x] Frontend tests — request filters and download behavior
 - [x] Production build — passed
-- [ ] Manual download verification
+- [x] User-reported manual check: CSV export works correctly. The automated browser harness did not capture the download event, so the file was not independently inspected by that harness.
 
-Validation note (2026-09-24): The full backend suite passed (84/84), the frontend
-suite passed (83/83), the production build passed, and `git diff --check` passed.
-The export endpoint returned CSV in the browser smoke test, but the browser
-download event could not be captured; final manual download verification remains
-pending, so this feature remains IN PROGRESS.
+Validation note (2026-09-24): Backend tests passed (84/84), frontend tests passed (91/91), production build passed with the large-chunk warning, and `git diff --check` passed. The API integration test covers filters, authorization/privacy, empty results, headers, dates, and decimal amounts.
 
 ---
 
 ### 2.6 Budget Copy / Carry Forward
 
-**Status:** `[~] IN PROGRESS — implementation and automated checks pass; manual UI verification pending`
+**Status:** `[~] IN PROGRESS — API/UI implemented and automated checks pass; manual UI verification pending`
 
 Planned scope:
 - Carry the previous month's budget into the next month.
@@ -266,16 +258,16 @@ Acceptance criteria:
 - [ ] Manual verification
 
 Validation note (2026-09-24): Backend tests passed (84/84), frontend tests passed
-(83/83), production build passed, and `git diff --check` passed. The isolated
+(91/91), production build passed, and `git diff --check` passed. The isolated
 browser smoke verified account registration, group creation, and matching
-Dashboard/Forecast budget and spend values. Manual previous-month copy remains
-pending.
+Dashboard/Forecast budget and spend values. The previous-month copy interaction
+has not been manually verified end to end.
 
 ---
 
 ### 2.7 Budget Threshold Notifications
 
-**Status:** `[~] IN PROGRESS — in-app/browser alerts implemented; background delivery remains undecided`
+**Status:** `[~] IN PROGRESS — in-app/browser alerts implemented; background delivery scope remains undecided`
 
 Planned scope:
 - Alert when shared spending reaches configured budget thresholds.
@@ -300,7 +292,7 @@ This should be implemented after core budget functionality is stable.
 
 ### 2.8 Dark Mode
 
-**Status:** `[~] IN PROGRESS — toggle and persisted theme pass automated checks; visual review pending`
+**Status:** `[~] IN PROGRESS — toggle, persistence, and dropdown styling are implemented and tested; full visual/mobile review pending`
 
 Planned scope:
 - Theme toggle.
@@ -322,7 +314,7 @@ Acceptance criteria:
 
 ### 2.9 E2E / Phase 2 Quality Gate
 
-**Status:** `[~] IN PROGRESS — cross-screen API integration scenario passes; browser E2E/manual review pending`
+**Status:** `[~] IN PROGRESS — real-route API integration scenarios pass; browser E2E/manual review pending`
 
 Although E2E was originally listed separately from the Phase 2 feature list,
 it should be treated as a Phase 2 quality gate before declaring Phase 2
@@ -347,24 +339,25 @@ Planned critical flows:
 Phase 2 should not be marked complete until:
 
 - [ ] All agreed Phase 2 features implemented
-- [ ] Backend tests pass
-- [ ] Frontend tests pass
-- [ ] Frontend production build passes
+- [x] Latest recorded backend tests passed (84/84)
+- [x] Latest recorded frontend tests passed (91/91)
+- [x] Latest recorded frontend production build passed (large-chunk warning remains)
 - [ ] Critical E2E/user flows verified
 - [ ] No known blocker bugs
 - [ ] No accidental debug/mock code
 - [ ] Git working tree reviewed
-- [ ] Documentation updated
-- [ ] User-approved release/promotion step (outside this development-only review; do not modify the private repository)
+- [x] Documentation updated
+- [ ] Remaining manual checks and decisions recorded above; release/promotion is outside this development-only gate
 
 Regression validation note (2026-09-24): The real API integration scenario covers
 two authenticated users and two groups across budget, transactions, analytics,
 forecast, privacy, CSV, settlement and source/payment linkage. An isolated
 browser smoke covered registration, group creation, budget save, transaction
 creation, and Dashboard/Forecast consistency. It caught a conditional-hook bug
-in the new alert effect; that bug was fixed and covered by a Dashboard render
-transition test. Full backend and frontend automated suites and the production
-build pass. Phase 2 remains open for manual export/copy/theme review and a
+in the alert effect; that bug was fixed and covered by a Dashboard render
+transition test. The latest recorded automated results are backend 84/84,
+frontend 91/91, and production build passed with a chunk-size warning. Phase 2
+remains open for budget-copy and full theme/manual regression checks, plus a
 decision on background notification delivery. No live PostgreSQL/Neon instance
 was available for integration tests.
 
@@ -379,7 +372,7 @@ budget/spend values. A temporary test account (`review_ale`), group
 app during the initial port-collision attempt; the test account was signed out
 and those rows were left untouched.
 
-**Next implementation after this baseline:** CSV Export.
+**Next priorities:** complete the manual Phase 2 checks listed above, decide alert/admin scope, and test the PostgreSQL foundation against a disposable live PostgreSQL database before claiming shared-database readiness.
 
 ---
 
@@ -625,3 +618,13 @@ reference; this file tracks what has actually been implemented.
 - SQLite Alembic upgrade passed; PostgreSQL offline Alembic SQL generation
   passed. No live PostgreSQL/Neon database was configured, so PostgreSQL
   integration is not verified and the foundation remains IN PROGRESS.
+
+
+## 2026-09-24 documentation continuation
+
+- Reconciled status wording with implementation and validation evidence;
+  rule-based categorization is not described as AI/LLM work.
+- Confirmed baseline `main` / `77f7183`; local documentation edits are not part
+  of that pushed commit.
+- Phase 2 remains open for recorded manual checks and unresolved decisions.
+- Phase 3 remains pending; no Phase 3 implementation is recorded.

@@ -1,11 +1,15 @@
 # SharedSpend
 
-A shared budget + personal expense tracker for two or more people.
+SharedSpend is a shared-budget and personal-expense application for one person and their invited friends or family. It is intended for a small trusted circle, not as a public SaaS product. Personal transactions stay private to the user who recorded them; group transactions and budgets are available to authorized group members.
+
+## Architecture and current database status
+
+The frontend is React + TypeScript + Vite. The backend is FastAPI with SQLAlchemy async ORM and Pydantic schemas. Versioned API routes are mounted at `/api/v1`; frontend API clients are under `frontend/src/api/`. Alembic manages schema migrations. Local development defaults to SQLite. PostgreSQL URL support and the async driver are implemented, with Neon Free as the planned shared-database target, but no live PostgreSQL/Neon integration has been verified. Do not treat the shared-database setup as production-ready until it has been tested against a real PostgreSQL instance.
 
 ## Quick Start (Backend)
 
 ```bash
-cd sharedspend/backend
+cd backend
 python -m venv .venv
 # Windows:
 .venv\Scripts\activate
@@ -29,7 +33,7 @@ API docs: http://localhost:8000/docs
 ## Running Tests
 
 ```bash
-cd sharedspend/backend
+cd backend
 pytest -v
 ```
 
@@ -46,11 +50,7 @@ pytest -v
 
 ## Shared PostgreSQL with Neon
 
-Local development can continue using the default SQLite database. To let
-multiple machines use the same SharedSpend data, create a Neon PostgreSQL
-database and put its connection URI in `backend/.env` (copy
-`backend/.env.example` first). Use the pooled URI from Neon when running
-multiple app instances. Keep this file and its credentials private.
+Local development can continue using the default SQLite database. The intended shared-database direction for private use across devices is managed PostgreSQL, with Neon Free as the current candidate. PostgreSQL URL handling and Alembic support exist, but live Neon/PostgreSQL connectivity, migrations, and runtime behavior have not yet been verified. Treat these instructions as setup guidance for a controlled test, not as evidence of production readiness. Keep `backend/.env` and all database credentials private.
 
 ```dotenv
 APP_ENV=production
