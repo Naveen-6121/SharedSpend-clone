@@ -115,6 +115,18 @@ export function GroupSettingsPage() {
     resolver: zodResolver(budgetSchema),
     values: budget ? { amount: budget.amount } : undefined,
   })
+  const copyPreviousMutation = useMutation({
+    mutationFn: () => budgetsApi.copyPrevious(activeGroup!.id, year, month),
+    onSuccess: (previous) => {
+      if (!previous) {
+        toast.info('No budget was set for the previous month')
+        return
+      }
+      budgetForm.setValue('amount', previous.amount, { shouldDirty: true, shouldValidate: true })
+      toast.success('Previous budget copied. Review the amount and save to apply it.')
+    },
+    onError: (err) => toast.error(parseApiError(err)),
+  })
   const budgetMutation = useMutation({
     mutationFn: (d: { amount: number }) => budgetsApi.upsert(activeGroup!.id, { year, month, amount: d.amount }),
     onSuccess: () => {
@@ -190,13 +202,20 @@ export function GroupSettingsPage() {
             <>
               {budget && <p className="text-sm text-muted-foreground mb-3">Current: <strong>{formatINR(budget.amount)}</strong></p>}
               {isOwner && (
-                <form onSubmit={budgetForm.handleSubmit((d) => budgetMutation.mutate(d))} className="flex gap-2">
-                  <Input type="number" min="0.01" step="0.01" placeholder="Amount (₹)" className="flex-1"
-                    {...budgetForm.register('amount')} />
-                  <Button type="submit" loading={budgetMutation.isPending}>
-                    {budget ? 'Update' : 'Set Budget'}
+                <div className="space-y-2">
+                  <form onSubmit={budgetForm.handleSubmit((d) => budgetMutation.mutate(d))} className="flex gap-2">
+                    <Input type="number" min="0.01" step="0.01" placeholder="Amount (₹)" className="flex-1"
+                      {...budgetForm.register('amount')} />
+                    <Button type="submit" loading={budgetMutation.isPending}>
+                      {budget ? 'Update' : 'Set Budget'}
+                    </Button>
+                  </form>
+                  <Button type="button" size="sm" variant="outline"
+                    loading={copyPreviousMutation.isPending}
+                    onClick={() => copyPreviousMutation.mutate()}>
+                    Copy previous month
                   </Button>
-                </form>
+                </div>
               )}
               {!budget && !isOwner && <p className="text-sm text-muted-foreground">No budget set for this month</p>}
             </>

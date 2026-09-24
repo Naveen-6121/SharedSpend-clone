@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, budgets, categories, categorizer, groups, transactions, users, analytics, settlements
+from app.api import admin, auth, budgets, categories, categorizer, groups, transactions, users, analytics, settlements
 from app.api.categories import seed_global_categories
 from app.config import settings
 from app.db.engine import AsyncSessionLocal, engine
@@ -15,9 +15,11 @@ import app.models  # noqa: F401 — register all ORM models
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables (Alembic should manage schema in production; this is a dev safety net)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # SQLite is convenient for local development. Shared/production databases
+    # must be initialized and upgraded through Alembic explicitly.
+    if settings.APP_ENV.lower() == "development" and settings.is_sqlite:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
     # Seed global categories
     async with AsyncSessionLocal() as db:
@@ -53,6 +55,7 @@ app.include_router(transactions.router, prefix=PREFIX)
 app.include_router(categorizer.router, prefix=PREFIX)
 app.include_router(analytics.router, prefix=PREFIX)
 app.include_router(settlements.router, prefix=PREFIX)
+app.include_router(admin.router, prefix=PREFIX)
 
 
 @app.get("/health")

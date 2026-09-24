@@ -2,13 +2,14 @@
  * SettlementPage — "Who owes whom?"
  *
  * Settlement is based exclusively on PERSONAL transactions that have
- * add_to_settlement=true. Minimum-transfer calculation is done by the backend.
+ * add_to_settlement=true. Each obligation stays linked to its original expense.
  * Settlement records are persisted server-side (not localStorage).
  */
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { settlementsApi, groupsApi } from '@/api'
 import { useGroup } from '@/context/GroupContext'
+import { useAuth } from '@/context/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -21,6 +22,7 @@ import type { SettlementTransfer, SettlementRecordOut } from '@/types'
 // ─── Component ────────────────────────────────────────────────────────────────
 export function SettlementPage() {
   const { activeGroup } = useGroup()
+  const { user } = useAuth()
   const [year, setYear] = useState(currentYear())
   const [month, setMonth] = useState(currentMonth())
   const queryClient = useQueryClient()
@@ -56,7 +58,7 @@ export function SettlementPage() {
   // Create a settlement record (to persist it)
   const createRecord = useMutation({
     mutationFn: (t: SettlementTransfer) =>
-      settlementsApi.create(activeGroup!.id, t.from_user_id, t.to_user_id, t.amount),
+      settlementsApi.create(activeGroup!.id, t.from_user_id, t.original_transaction_id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settlement-records', activeGroup?.id] })
       queryClient.invalidateQueries({
@@ -69,6 +71,8 @@ export function SettlementPage() {
   const markSettled = useMutation({
     mutationFn: (id: string) => settlementsApi.settle(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['analytics'] })
       queryClient.invalidateQueries({ queryKey: ['settlement-records', activeGroup?.id] })
       queryClient.invalidateQueries({
         queryKey: ['settlement-calculate', activeGroup?.id, year, month],
@@ -80,6 +84,8 @@ export function SettlementPage() {
   const deleteRecord = useMutation({
     mutationFn: (id: string) => settlementsApi.delete(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['analytics'] })
       queryClient.invalidateQueries({ queryKey: ['settlement-records', activeGroup?.id] })
       queryClient.invalidateQueries({
         queryKey: ['settlement-calculate', activeGroup?.id, year, month],
@@ -89,34 +95,21 @@ export function SettlementPage() {
 
   const loading = calcLoading || recordsLoading
 
-  // Determine which calculated transfers already have a persisted PENDING record
-  const pendingRecords = records.filter((r) => r.status === 'PENDING')
-  const settledRecords = records.filter((r) => r.status === 'SETTLED')
+  // Use the original expense period consistently for pending and settled records.
+  const recordsForPeriod = records.filter((r) =>
+    (r.original_transaction_date ?? r.created_at).slice(0, 7) ===
+      `${year}-${String(month).padStart(2, '0')}`
+  )
+  const pendingRecords = recordsForPeriod.filter((r) => r.status === 'PENDING')
+  const settledRecords = recordsForPeriod.filter((r) => r.status === 'SETTLED')
+  const settledRecordsForPeriod = settledRecords
 
-  // Exclude calculated transfers that have already been settled.
-  const settledRecordsForPeriod = settledRecords.filter((r) => {
-    const recordDate = new Date(r.created_at)
-    return (
-      recordDate.getFullYear() === year &&
-      recordDate.getMonth() + 1 === month
+  const outstandingTransfers = transfers.filter((transfer) =>
+    !settledRecordsForPeriod.some((record) =>
+      record.original_transaction_id === transfer.original_transaction_id &&
+      record.from_user_id === transfer.from_user_id && record.to_user_id === transfer.to_user_id
     )
-  })
-
-  const outstandingTransfers = transfers.flatMap((transfer) => {
-    const settledAmount = settledRecordsForPeriod
-      .filter(
-        (record) =>
-          record.from_user_id === transfer.from_user_id &&
-          record.to_user_id === transfer.to_user_id
-      )
-      .reduce((sum, record) => sum + Number(record.amount), 0)
-
-    const remaining = Number(transfer.amount) - settledAmount
-
-    return remaining > 0.009
-      ? [{ ...transfer, amount: remaining }]
-      : []
-  })
+  )
 
   // Transfers that haven't been persisted yet
   const unpersisted = outstandingTransfers.filter(
@@ -124,7 +117,7 @@ export function SettlementPage() {
       (r) =>
         r.from_user_id === t.from_user_id &&
         r.to_user_id === t.to_user_id &&
-        Math.abs(Number(r.amount) - Number(t.amount)) < 0.01
+        r.original_transaction_id === t.original_transaction_id
     )
   )
 
@@ -233,8 +226,11 @@ export function SettlementPage() {
                         <span className="text-destructive">{memberNames[t.from_user_id] ?? t.from_user_id}</span>
                         <span className="text-muted-foreground mx-2">owes</span>
                         <span className="text-green-600">{memberNames[t.to_user_id] ?? t.to_user_id}</span>
+                        <span className="ml-2">{formatINR(t.amount)}</span>
                       </p>
-                      <p className="text-2xl font-bold tabular-nums mt-1">{formatINR(t.amount)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        For {t.original_description} · {formatINR(t.original_amount)} · paid by {memberNames[t.to_user_id] ?? t.to_user_id}
+                      </p>
                     </div>
                     <Button
                       size="sm"
@@ -243,7 +239,7 @@ export function SettlementPage() {
                       disabled={createRecord.isPending}
                       className="shrink-0"
                     >
-                      ✓ Mark as Settled
+                      Track payment
                     </Button>
                   </div>
                 </CardContent>
@@ -260,18 +256,23 @@ export function SettlementPage() {
                         <span className="text-destructive">{memberNames[r.from_user_id] ?? r.from_user_id}</span>
                         <span className="text-muted-foreground mx-2">owes</span>
                         <span className="text-green-600">{memberNames[r.to_user_id] ?? r.to_user_id}</span>
+                        <span className="ml-2">{formatINR(r.amount)}</span>
                       </p>
-                      <p className="text-2xl font-bold tabular-nums mt-1">{formatINR(r.amount)}</p>
+                      {r.original_description && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          For {r.original_description}{r.original_amount != null ? ` · ${formatINR(r.original_amount)}` : ''} · paid by {memberNames[r.to_user_id] ?? r.to_user_id}
+                        </p>
+                      )}
                     </div>
-                    <Button
+                    {user?.id === r.from_user_id ? <Button
                       size="sm"
                       variant="outline"
                       onClick={() => markSettled.mutate(r.id)}
                       disabled={markSettled.isPending}
                       className="shrink-0"
                     >
-                      ✓ Mark as Settled
-                    </Button>
+                      ✓ Mark as Paid
+                    </Button> : <Badge variant="secondary">Awaiting payer</Badge>}
                   </div>
                 </CardContent>
               </Card>
@@ -293,7 +294,13 @@ export function SettlementPage() {
                       <span className="font-medium">{memberNames[r.from_user_id] ?? r.from_user_id}</span>
                       <span className="text-muted-foreground mx-1">paid</span>
                       <span className="font-medium">{memberNames[r.to_user_id] ?? r.to_user_id}</span>
+                      <span className="ml-2 font-medium">{formatINR(r.amount)}</span>
                     </p>
+                    {r.original_description && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        For {r.original_description}{r.original_amount != null ? ` · original expense ${formatINR(r.original_amount)}` : ''}
+                      </p>
+                    )}
                     {r.settled_at && (
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {new Date(r.settled_at).toLocaleDateString('en-IN', {
@@ -304,7 +311,6 @@ export function SettlementPage() {
                   </div>
                   <div className="text-right flex items-center gap-2">
                     <div>
-                      <p className="text-sm font-semibold tabular-nums">{formatINR(r.amount)}</p>
                       <Badge variant="secondary" className="text-xs mt-1">Settled</Badge>
                     </div>
                     <button

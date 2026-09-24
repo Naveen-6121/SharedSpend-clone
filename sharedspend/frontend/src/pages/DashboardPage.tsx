@@ -1,7 +1,10 @@
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
 import { PlusCircle, Users } from 'lucide-react'
 import { useGroup } from '@/context/GroupContext'
+import { useAuth } from '@/context/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +15,7 @@ import { analyticsApi, transactionsApi } from '@/api'
 import { formatINR, toLocalDateString, currentYear, currentMonth, utilizationColor } from '@/lib/format'
 import type { TransactionOut, GroupMemberOut } from '@/types'
 import { groupsApi } from '@/api'
+import { budgetAlertsEnabled, takeNewBudgetThresholds } from '@/lib/budgetNotifications'
 
 // ─── Budget + Remaining combined card ────────────────────────────────────────
 function BudgetCard({
@@ -188,6 +192,7 @@ function TxRow({ tx, members }: { tx: TransactionOut; members: GroupMemberOut[] 
 // ─── Main dashboard ───────────────────────────────────────────────────────────
 export function DashboardPage() {
   const { activeGroup } = useGroup()
+  const { user } = useAuth()
   const year = currentYear()
   const month = currentMonth()
 
@@ -228,6 +233,20 @@ export function DashboardPage() {
     queryFn: () => groupsApi.members(activeGroup!.id),
     enabled,
   })
+
+  useEffect(() => {
+    if (!summary || !activeGroup || !user || !budgetAlertsEnabled()) return
+    const thresholds = takeNewBudgetThresholds(
+      user.id, activeGroup.id, year, month, summary.budget, summary.shared_spent,
+    )
+    for (const threshold of thresholds) {
+      const message = `${activeGroup.name} has used ${threshold}% of this month's shared budget.`
+      toast.warning(message)
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('SharedSpend budget alert', { body: message })
+      }
+    }
+  }, [activeGroup, month, summary, user, year])
 
   if (!activeGroup) {
     return (

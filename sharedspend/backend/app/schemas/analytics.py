@@ -63,7 +63,7 @@ class MemberContribution(BaseModel):
     user_id: str
     display_name: Optional[str]
     paid: Decimal
-    personal_spent: Decimal
+    personal_spent: Optional[Decimal]
 
 
 class HighestItem(BaseModel):

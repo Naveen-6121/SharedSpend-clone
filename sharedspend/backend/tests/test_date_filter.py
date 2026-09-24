@@ -24,6 +24,20 @@ def test_custom_range():
     assert end == end_d
 
 
+def test_date_from_only_ends_today():
+    start_d = date(2025, 7, 1)
+    start, end = resolve_date_range(DateFilterParams(date_from=start_d))
+    assert start == start_d
+    assert end == date.today()
+
+
+def test_date_to_only_starts_at_earliest_date():
+    end_d = date(2025, 7, 31)
+    start, end = resolve_date_range(DateFilterParams(date_to=end_d))
+    assert start == date.min
+    assert end == end_d
+
+
 def test_week_filter():
     # ISO week 1 of 2024: Mon Jan 1 – Sun Jan 7
     params = DateFilterParams(week=1, year=2024)

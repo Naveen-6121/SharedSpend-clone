@@ -311,14 +311,16 @@ export function AnalyticsPage() {
                         </thead>
                         <tbody>
                           {members.map((m) => {
-                            const total = m.paid + m.personal_spent
+                            const total = m.paid + (m.personal_spent ?? 0)
                             return (
                               <tr key={m.user_id} className="border-b last:border-0">
                                 <td className="py-2.5 pr-4 font-medium">
                                   {m.display_name ?? m.user_id}
                                 </td>
                                 <td className="py-2.5 px-4 text-right tabular-nums">{formatINR(m.paid)}</td>
-                                <td className="py-2.5 px-4 text-right tabular-nums text-muted-foreground">{formatINR(m.personal_spent)}</td>
+                                <td className="py-2.5 px-4 text-right tabular-nums text-muted-foreground">
+                                  {m.personal_spent == null ? 'Private' : formatINR(m.personal_spent)}
+                                </td>
                                 <td className="py-2.5 pl-4 text-right tabular-nums font-semibold">{formatINR(total)}</td>
                               </tr>
                             )
@@ -331,10 +333,10 @@ export function AnalyticsPage() {
                               {formatINR(members.reduce((s, m) => s + m.paid, 0))}
                             </td>
                             <td className="py-2 px-4 text-right tabular-nums font-medium">
-                              {formatINR(members.reduce((s, m) => s + m.personal_spent, 0))}
+                              {formatINR(members.reduce((s, m) => s + (m.personal_spent ?? 0), 0))}
                             </td>
                             <td className="py-2 pl-4 text-right tabular-nums font-semibold">
-                              {formatINR(members.reduce((s, m) => s + m.paid + m.personal_spent, 0))}
+                              {formatINR(members.reduce((s, m) => s + m.paid + (m.personal_spent ?? 0), 0))}
                             </td>
                           </tr>
                         </tfoot>

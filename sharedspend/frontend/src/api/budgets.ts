@@ -5,12 +5,18 @@ export const budgetsApi = {
   /**
    * Get the budget for a specific year+month.
    * Backend has no single-budget GET endpoint — we list all budgets and find the match.
-   * Returns undefined (not null) when no budget is set for that period.
+   * Returns null when no budget is set for that period so React Query can cache
+   * the successful empty result instead of treating it as an invalid query value.
    */
   get: (groupId: string, year: number, month: number) =>
     apiClient
       .get<BudgetPeriodOut[]>(`/groups/${groupId}/budgets`)
-      .then((r) => r.data.find((b) => b.year === year && b.month === month)),
+      .then((r) => r.data.find((b) => b.year === year && b.month === month) ?? null),
+
+  copyPrevious: (groupId: string, year: number, month: number) =>
+    apiClient
+      .get<BudgetPeriodOut | null>(`/groups/${groupId}/budgets/${year}/${month}/previous`)
+      .then((r) => r.data),
 
   /**
    * Create or update a budget period.

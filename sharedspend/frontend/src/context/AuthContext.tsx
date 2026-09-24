@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { authApi, tokenStorage, usersApi } from '@/api'
 import type { LoginRequest, UserCreate, UserOut } from '@/types'
 
@@ -18,6 +19,7 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
   const [state, setState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
@@ -27,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUser = useCallback(async () => {
     const token = tokenStorage.getAccess()
     if (!token) {
+      queryClient.clear()
       setState({ user: null, isAuthenticated: false, isLoading: false })
       return
     }
@@ -35,9 +38,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setState({ user, isAuthenticated: true, isLoading: false })
     } catch {
       tokenStorage.clear()
+      queryClient.clear()
       setState({ user: null, isAuthenticated: false, isLoading: false })
     }
-  }, [])
+  }, [queryClient])
 
   useEffect(() => {
     loadUser()
@@ -45,13 +49,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Listen for forced logout from 401 interceptor
   useEffect(() => {
-    const handler = () => setState({ user: null, isAuthenticated: false, isLoading: false })
+    const handler = () => {
+      queryClient.clear()
+      setState({ user: null, isAuthenticated: false, isLoading: false })
+    }
     window.addEventListener('auth:logout', handler)
     return () => window.removeEventListener('auth:logout', handler)
-  }, [])
+  }, [queryClient])
 
   const login = async (data: LoginRequest) => {
     const tokens = await authApi.login(data)
+    queryClient.clear()
     tokenStorage.set(tokens.access_token, tokens.refresh_token)
     const user = await usersApi.me()
     setState({ user, isAuthenticated: true, isLoading: false })
@@ -59,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (data: UserCreate) => {
     const tokens = await authApi.register(data)
+    queryClient.clear()
     tokenStorage.set(tokens.access_token, tokens.refresh_token)
     const user = await usersApi.me()
     setState({ user, isAuthenticated: true, isLoading: false })
@@ -67,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try { await authApi.logout() } catch { /* ignore */ }
     tokenStorage.clear()
+    queryClient.clear()
     setState({ user: null, isAuthenticated: false, isLoading: false })
   }
 

@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.models.group import GroupMember
 from app.models.user import User
 from app.schemas.analytics import (
     CategorySpend,
@@ -33,22 +35,43 @@ from app.services.analytics import (
 from app.services.auth import get_current_user
 from app.services.date_filter import DateFilterParams
 
-router = APIRouter(prefix="/analytics", tags=["analytics"])
+async def _require_group_member(
+    group_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if group_id:
+        member_id = await db.scalar(
+            select(GroupMember.id).where(
+                GroupMember.group_id == group_id,
+                GroupMember.user_id == current_user.id,
+            )
+        )
+        if member_id is None:
+            raise HTTPException(status_code=403, detail="Not a member of this group")
+
+
+router = APIRouter(
+    prefix="/analytics", tags=["analytics"], dependencies=[Depends(_require_group_member)]
+)
 
 
 def _date_params(
     group_id: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
-    month: Optional[int] = Query(None),
-    week: Optional[int] = Query(None),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    week: Optional[int] = Query(None, ge=1, le=53),
     date: Optional[date] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
 ) -> tuple:
-    return group_id, DateFilterParams(
+    date_params = DateFilterParams(
         year=year, month=month, week=week,
         date_param=date, date_from=date_from, date_to=date_to
     )
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
+    return group_id, date_params
 
 
 @router.get("/summary", response_model=SummaryOut)
@@ -137,7 +160,7 @@ async def insights(
 async def forecast(
     group_id: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
-    month: Optional[int] = Query(None),
+    month: Optional[int] = Query(None, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

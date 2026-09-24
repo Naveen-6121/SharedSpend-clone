@@ -36,8 +36,10 @@ def resolve_date_range(params: DateFilterParams) -> Tuple[date, date]:
     if params.date_param is not None:
         return (params.date_param, params.date_param)
 
-    if params.date_from is not None and params.date_to is not None:
-        return (params.date_from, params.date_to)
+    if params.date_from is not None or params.date_to is not None:
+        start = params.date_from or date.min
+        end = params.date_to or date.today()
+        return (start, end)
 
     if params.week is not None:
         year = params.year or date.today().year

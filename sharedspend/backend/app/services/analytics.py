@@ -68,6 +68,7 @@ async def get_summary(
     # personal_by_member – current user only (personal is private)
     personal_q = select(func.coalesce(func.sum(Transaction.amount), 0)).where(
         Transaction.type == "PERSONAL",
+        Transaction.settlement_record_id.is_(None),
         Transaction.recorded_by_id == current_user_id,
         Transaction.is_deleted == False,  # noqa: E712
         Transaction.date >= start,
@@ -101,9 +102,11 @@ async def get_summary(
         .group_by(Transaction.payer_id)
     )
     if group_id:
-        # only personal txns paid by group members
         member_ids_q = select(GroupMember.user_id).where(GroupMember.group_id == group_id)
-        paid_q = paid_q.where(Transaction.payer_id.in_(member_ids_q))
+        paid_q = paid_q.where(
+            Transaction.payer_id.in_(member_ids_q),
+            Transaction.settlement_group_id == group_id,
+        )
     else:
         member_groups2 = select(GroupMember.group_id).where(GroupMember.user_id == current_user_id)
         member_ids_q2 = select(GroupMember.user_id).where(GroupMember.group_id.in_(member_groups2))
@@ -147,20 +150,14 @@ async def get_by_category(
         )
         .outerjoin(Category, Transaction.category_id == Category.id)
         .where(
+            Transaction.settlement_record_id.is_(None),
             Transaction.is_deleted == False,  # noqa: E712
             Transaction.date >= start,
             Transaction.date <= end,
         )
         .group_by(Transaction.category_id, Category.name)
     )
-    if group_id:
-        q = q.where(Transaction.group_id == group_id, Transaction.type == "SHARED")
-    else:
-        member_groups = select(GroupMember.group_id).where(GroupMember.user_id == current_user_id)
-        q = q.where(
-            (Transaction.group_id.in_(member_groups) & (Transaction.type == "SHARED"))
-            | (Transaction.recorded_by_id == current_user_id)
-        )
+    q = _apply_visibility(q, current_user_id, group_id)
     rows = (await db.execute(q)).all()
     return [
         {
@@ -187,6 +184,7 @@ async def get_by_day(
             func.sum(case((Transaction.type == "PERSONAL", Transaction.amount), else_=0)).label("personal"),
         )
         .where(
+            Transaction.settlement_record_id.is_(None),
             Transaction.is_deleted == False,  # noqa: E712
             Transaction.date >= start,
             Transaction.date <= end,
@@ -217,6 +215,7 @@ async def get_by_week(
             func.sum(case((Transaction.type == "PERSONAL", Transaction.amount), else_=0)).label("personal"),
         )
         .where(
+            Transaction.settlement_record_id.is_(None),
             Transaction.is_deleted == False,  # noqa: E712
             Transaction.date >= start,
             Transaction.date <= end,
@@ -252,6 +251,7 @@ async def get_by_month(
             func.sum(case((Transaction.type == "PERSONAL", Transaction.amount), else_=0)).label("personal"),
         )
         .where(
+            Transaction.settlement_record_id.is_(None),
             Transaction.is_deleted == False,  # noqa: E712
             Transaction.date >= start,
             Transaction.date <= end,
@@ -286,6 +286,7 @@ async def get_by_year(
             func.sum(case((Transaction.type == "PERSONAL", Transaction.amount), else_=0)).label("personal"),
         )
         .where(
+            Transaction.settlement_record_id.is_(None),
             Transaction.is_deleted == False,  # noqa: E712
             Transaction.date >= start,
             Transaction.date <= end,
@@ -332,6 +333,8 @@ async def get_members(
         paid_res = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount), 0)).where(
                 Transaction.type == "PERSONAL",
+                Transaction.settlement_group_id == group_id,
+                Transaction.settlement_record_id.is_(None),
                 Transaction.add_to_settlement == True,  # noqa: E712
                 Transaction.payer_id == m.user_id,
                 Transaction.is_deleted == False,  # noqa: E712
@@ -341,16 +344,19 @@ async def get_members(
         )
         paid = Decimal(str(paid_res.scalar()))
 
-        personal_res = await db.execute(
-            select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+        personal = None
+        if m.user_id == current_user_id:
+            personal_res = await db.execute(
+                select(func.coalesce(func.sum(Transaction.amount), 0)).where(
                 Transaction.type == "PERSONAL",
+                Transaction.settlement_record_id.is_(None),
                 Transaction.recorded_by_id == m.user_id,
                 Transaction.is_deleted == False,  # noqa: E712
                 Transaction.date >= start,
                 Transaction.date <= end,
+                )
             )
-        )
-        personal = Decimal(str(personal_res.scalar()))
+            personal = Decimal(str(personal_res.scalar()))
 
         result.append(
             {
@@ -379,6 +385,7 @@ async def get_insights(
         )
         .outerjoin(Category, Transaction.category_id == Category.id)
         .where(
+            Transaction.settlement_record_id.is_(None),
             Transaction.is_deleted == False,  # noqa: E712
             Transaction.date >= start,
             Transaction.date <= end,
@@ -400,6 +407,7 @@ async def get_insights(
             func.sum(Transaction.amount).label("total"),
         )
         .where(
+            Transaction.settlement_record_id.is_(None),
             Transaction.is_deleted == False,  # noqa: E712
             Transaction.date >= start,
             Transaction.date <= end,
@@ -419,6 +427,7 @@ async def get_insights(
         select(Transaction)
         .where(
             Transaction.is_deleted == False,  # noqa: E712
+            Transaction.settlement_record_id.is_(None),
             Transaction.date >= start,
             Transaction.date <= end,
         )
@@ -445,17 +454,18 @@ async def get_insights(
         prev_year = params.year if params.month > 1 else params.year - 1
         curr_q = select(func.coalesce(func.sum(Transaction.amount), 0)).where(
             Transaction.is_deleted == False,  # noqa: E712
+            Transaction.settlement_record_id.is_(None),
             extract("year", Transaction.date) == params.year,
             extract("month", Transaction.date) == params.month,
         )
         prev_q = select(func.coalesce(func.sum(Transaction.amount), 0)).where(
             Transaction.is_deleted == False,  # noqa: E712
+            Transaction.settlement_record_id.is_(None),
             extract("year", Transaction.date) == prev_year,
             extract("month", Transaction.date) == prev_month,
         )
-        if group_id:
-            curr_q = curr_q.where(Transaction.group_id == group_id)
-            prev_q = prev_q.where(Transaction.group_id == group_id)
+        curr_q = _apply_visibility(curr_q, current_user_id, group_id)
+        prev_q = _apply_visibility(prev_q, current_user_id, group_id)
         curr_total = Decimal(str((await db.execute(curr_q)).scalar()))
         prev_total = Decimal(str((await db.execute(prev_q)).scalar()))
         if prev_total > 0:
@@ -524,15 +534,15 @@ async def get_forecast(
 
 
 def _apply_visibility(q, current_user_id: str, group_id: Optional[str]):
-    """Apply the standard visibility filter: shared txns in user's groups + own personal."""
+    """Show this group's shared spend and only the authenticated user's private spend."""
     if group_id:
-        # Only shared transactions of the specific group (and user's own personal)
         return q.where(
-            (Transaction.group_id == group_id) | (Transaction.recorded_by_id == current_user_id)
+            ((Transaction.group_id == group_id) & (Transaction.type == "SHARED"))
+            | ((Transaction.type == "PERSONAL") & (Transaction.recorded_by_id == current_user_id))
         )
     else:
         member_groups = select(GroupMember.group_id).where(GroupMember.user_id == current_user_id)
         return q.where(
             (Transaction.group_id.in_(member_groups) & (Transaction.type == "SHARED"))
-            | (Transaction.recorded_by_id == current_user_id)
+            | ((Transaction.type == "PERSONAL") & (Transaction.recorded_by_id == current_user_id))
         )

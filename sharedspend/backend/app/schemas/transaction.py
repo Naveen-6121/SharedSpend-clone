@@ -25,6 +25,8 @@ class TransactionCreate(BaseModel):
     suggested_category_id: Optional[str] = None
     notes: Optional[str] = None
     add_to_settlement: bool = False
+    settlement_group_id: Optional[str] = None
+    settlement_participant_ids: Optional[list[str]] = None
 
     @field_validator("type")
     @classmethod
@@ -40,7 +42,7 @@ class TransactionCreate(BaseModel):
             raise ValueError("amount must be positive")
         return v
 
-    @field_validator("payer_id", "group_id", "category_id", "suggested_category_id", mode="before")
+    @field_validator("payer_id", "group_id", "category_id", "suggested_category_id", "settlement_group_id", mode="before")
     @classmethod
     def empty_to_none(cls, v: object) -> object:
         if v == "":
@@ -59,6 +61,8 @@ class TransactionUpdate(BaseModel):
     suggested_category_id: Optional[str] = None
     notes: Optional[str] = None
     add_to_settlement: Optional[bool] = None
+    settlement_group_id: Optional[str] = None
+    settlement_participant_ids: Optional[list[str]] = None
 
     @field_validator("type")
     @classmethod
@@ -67,7 +71,7 @@ class TransactionUpdate(BaseModel):
             raise ValueError("type must be SHARED or PERSONAL")
         return v
 
-    @field_validator("payer_id", "group_id", "category_id", "suggested_category_id", mode="before")
+    @field_validator("payer_id", "group_id", "category_id", "suggested_category_id", "settlement_group_id", mode="before")
     @classmethod
     def empty_to_none(cls, v: object) -> object:
         if v == "":
@@ -88,6 +92,9 @@ class TransactionOut(BaseModel):
     suggested_category_id: Optional[str]
     notes: Optional[str]
     add_to_settlement: bool
+    settlement_group_id: Optional[str] = None
+    settlement_participant_ids: Optional[list[str]] = None
+    settlement_record_id: Optional[str] = None
     is_deleted: bool
     created_at: datetime
     updated_at: datetime

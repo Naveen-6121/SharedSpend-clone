@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import { AuthProvider } from '@/context/AuthContext'
 import { GroupProvider } from '@/context/GroupContext'
 import { RequireAuth } from '@/components/RequireAuth'
+import { RequireAdmin } from '@/components/RequireAdmin'
 import { AppShell } from '@/components/AppShell'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LoginPage } from '@/pages/LoginPage'
@@ -18,6 +19,8 @@ import { GroupSettingsPage, CreateGroupPage } from '@/pages/GroupPages'
 import { CategoriesPage } from '@/pages/CategoriesPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { AdminPage } from '@/pages/AdminPage'
+import { ThemeProvider } from '@/context/ThemeContext'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +50,7 @@ function AuthenticatedApp() {
           <Route path="/settings/group" element={<GroupSettingsPage />} />
           <Route path="/settings/categories" element={<CategoriesPage />} />
           <Route path="/settings/profile" element={<ProfilePage />} />
+          <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
           <Route path="/groups/new" element={<CreateGroupPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
@@ -59,8 +63,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <BrowserRouter>
+        <ThemeProvider>
+          <AuthProvider>
+            <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
@@ -72,9 +77,10 @@ export default function App() {
                 </RequireAuth>
               } />
             </Routes>
-          </BrowserRouter>
-          <Toaster richColors position="top-right" closeButton />
-        </AuthProvider>
+            </BrowserRouter>
+            <Toaster richColors position="top-right" closeButton />
+          </AuthProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   )

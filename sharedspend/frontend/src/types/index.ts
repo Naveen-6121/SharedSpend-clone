@@ -32,7 +32,28 @@ export interface UserOut {
   email: string
   display_name: string
   is_active: boolean
+  is_admin: boolean
   created_at: string
+}
+
+export interface AdminUserOut {
+  id: string
+  username: string
+  display_name: string | null
+  is_active: boolean
+  is_admin: boolean
+  created_at: string
+}
+
+export interface AdminUserStatusUpdate {
+  is_active: boolean
+}
+
+export interface DatabaseStatusOut {
+  database_connected: boolean
+  current_revisions: string[]
+  head_revisions: string[]
+  migrations_current: boolean
 }
 
 export interface UserUpdate {
@@ -150,6 +171,8 @@ export interface TransactionCreate {
   payer_id?: string | null
   notes?: string | null
   add_to_settlement?: boolean
+  settlement_group_id?: string | null
+  settlement_participant_ids?: string[] | null
 }
 
 export interface TransactionUpdate {
@@ -162,6 +185,8 @@ export interface TransactionUpdate {
   payer_id?: string | null
   notes?: string | null
   add_to_settlement?: boolean
+  settlement_group_id?: string | null
+  settlement_participant_ids?: string[] | null
 }
 
 /** Matches backend TransactionOut exactly */
@@ -178,6 +203,9 @@ export interface TransactionOut {
   suggested_category_id: string | null
   notes: string | null
   add_to_settlement: boolean
+  settlement_group_id: string | null
+  settlement_participant_ids: string[] | null
+  settlement_record_id: string | null
   is_deleted: boolean
   created_at: string
   updated_at: string
@@ -196,6 +224,7 @@ export interface TransactionFilters {
   group_id?: string
   type?: TransactionType
   category_id?: string
+  payer_id?: string
   date_from?: string
   date_to?: string
   year?: number
@@ -281,7 +310,7 @@ export interface MemberContribution {
   user_id: string
   display_name: string | null
   paid: number
-  personal_spent: number
+  personal_spent: number | null
 }
 
 export interface HighestItem {
@@ -315,6 +344,10 @@ export interface SettlementTransfer {
   from_user_id: string
   to_user_id: string
   amount: number
+  original_transaction_id: string
+  original_description: string
+  original_amount: number
+  original_transaction_date: string
 }
 
 /** Persisted settlement record from the backend */
@@ -324,6 +357,11 @@ export interface SettlementRecordOut {
   from_user_id: string
   to_user_id: string
   amount: number
+  original_transaction_id: string | null
+  original_description: string | null
+  original_amount: number | null
+  original_transaction_date: string | null
+  payment_transaction_id: string | null
   status: SettlementStatus
   settled_at: string | null
   created_at: string

@@ -169,10 +169,11 @@ export function useCategorize() {
 }
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
-export function useTransactions(filters: TransactionFilters = {}) {
+export function useTransactions(filters: TransactionFilters = {}, enabled = true) {
   return useQuery({
     queryKey: QK.transactions(filters),
     queryFn: () => transactionsApi.list(filters),
+    enabled,
   })
 }
 

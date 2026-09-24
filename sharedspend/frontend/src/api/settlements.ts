@@ -23,12 +23,13 @@ export const settlementsApi = {
   create(
     groupId: string,
     fromUserId: string,
-    toUserId: string,
-    amount: number,
+    originalTransactionId: string,
   ): Promise<SettlementRecordOut> {
-    const params = { from_user_id: fromUserId, to_user_id: toUserId, amount: String(amount) }
     return apiClient
-      .post<SettlementRecordOut>(`/settlements/groups/${groupId}`, {}, { params })
+      .post<SettlementRecordOut>(`/settlements/groups/${groupId}`, {
+        from_user_id: fromUserId,
+        original_transaction_id: originalTransactionId,
+      })
       .then((r) => r.data)
   },
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -31,6 +31,13 @@ class Transaction(Base):
     suggested_category_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("categories.id"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     add_to_settlement: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    settlement_group_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("groups.id"), nullable=True
+    )
+    settlement_participant_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    settlement_record_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("settlement_records.id", ondelete="SET NULL"), nullable=True, unique=True
+    )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)

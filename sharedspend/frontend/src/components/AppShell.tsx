@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, ArrowLeftRight, BarChart2, Settings, LogOut, ChevronDown, PlusCircle, Check, Scale
+  LayoutDashboard, ArrowLeftRight, BarChart2, Settings, LogOut, ChevronDown, PlusCircle, Check, Scale, Shield
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/context/AuthContext'
@@ -30,6 +30,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { groups, activeGroup, setActiveGroup } = useGroup()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const visibleNavItems = user?.is_admin
+    ? [...navItems, { to: '/admin', icon: Shield, label: 'Admin' }]
+    : navItems
 
   const switchGroup = (g: GroupOut) => {
     setActiveGroup(g)
@@ -63,7 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <DropdownMenuSeparator />
               {groups.map((g) => (
                 <DropdownMenuItem key={g.id} onClick={() => switchGroup(g)}
-                  className={cn('flex items-center gap-2', activeGroup?.id === g.id && 'font-medium')}>
+                  className={cn('flex items-center gap-2', activeGroup?.id === g.id && 'bg-accent text-accent-foreground font-medium')}>
                   <Check className={cn('h-4 w-4 shrink-0', activeGroup?.id === g.id ? 'opacity-100' : 'opacity-0')} />
                   {g.name}
                 </DropdownMenuItem>
@@ -78,7 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Nav links */}
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {navItems.map(({ to, icon: Icon, label }) => (
+          {visibleNavItems.map(({ to, icon: Icon, label }) => (
             <NavLink key={to} to={to} end={to === '/'}
               className={({ isActive }) => cn(
                 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -120,7 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <DropdownMenuContent align="end">
               {groups.map((g) => (
                 <DropdownMenuItem key={g.id} onClick={() => switchGroup(g)}
-                  className={cn('flex items-center gap-2', activeGroup?.id === g.id && 'font-medium')}>
+                  className={cn('flex items-center gap-2', activeGroup?.id === g.id && 'bg-accent text-accent-foreground font-medium')}>
                   <Check className={cn('h-4 w-4 shrink-0', activeGroup?.id === g.id ? 'opacity-100' : 'opacity-0')} />
                   {g.name}
                 </DropdownMenuItem>
@@ -140,7 +143,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Mobile bottom nav */}
         <nav className="md:hidden flex border-t bg-card">
-          {navItems.map(({ to, icon: Icon, label }) => (
+          {visibleNavItems.map(({ to, icon: Icon, label }) => (
             <NavLink key={to} to={to} end={to === '/'}
               className={({ isActive }) => cn(
                 'flex flex-1 flex-col items-center gap-1 py-2 text-xs font-medium transition-colors',

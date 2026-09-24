@@ -209,7 +209,7 @@ projected_spend =
 
 ### 2.5 CSV Export
 
-**Status:** `[ ] PENDING — NEXT IMPLEMENTATION`
+**Status:** `[~] IN PROGRESS — implementation and automated checks pass; browser download verification pending`
 
 Planned scope:
 - Export filtered transactions as CSV.
@@ -228,21 +228,27 @@ Original architecture direction:
 - `GET /transactions/export`
 
 Acceptance criteria:
-- [ ] Backend export endpoint implemented
-- [ ] Same authorization rules as transaction listing
-- [ ] Filters match transaction-list behavior
-- [ ] CSV headers defined
-- [ ] Frontend download action
-- [ ] Backend tests
-- [ ] Frontend tests
-- [ ] Production build
+- [x] Backend export endpoint implemented
+- [x] Same authorization rules as transaction listing — implementation shares the list query
+- [x] Filters match transaction-list behavior — implementation shares the list query
+- [x] CSV headers defined
+- [x] Frontend download action — tested with the selected filters
+- [x] Backend tests — filtered export, authorization, empty output, headers, date and decimal amounts
+- [x] Frontend tests — request filters and download behavior
+- [x] Production build — passed
 - [ ] Manual download verification
+
+Validation note (2026-09-24): The full backend suite passed (84/84), the frontend
+suite passed (83/83), the production build passed, and `git diff --check` passed.
+The export endpoint returned CSV in the browser smoke test, but the browser
+download event could not be captured; final manual download verification remains
+pending, so this feature remains IN PROGRESS.
 
 ---
 
 ### 2.6 Budget Copy / Carry Forward
 
-**Status:** `[ ] PENDING`
+**Status:** `[~] IN PROGRESS — implementation and automated checks pass; manual UI verification pending`
 
 Planned scope:
 - Carry the previous month's budget into the next month.
@@ -252,31 +258,41 @@ Original architecture direction:
 - Budget endpoint with a copy-from-previous-month capability.
 
 Acceptance criteria:
-- [ ] Backend API
-- [ ] Frontend action/UI
-- [ ] Duplicate-period protection
-- [ ] Tests
-- [ ] Build
+- [x] Backend API returns the previous calendar month's amount without writing it
+- [x] Frontend action fills the editable amount; the user must save explicitly
+- [x] Existing current-period budgets are updated through the existing upsert, not duplicated
+- [x] API and cross-screen integration tests
+- [x] Build
 - [ ] Manual verification
+
+Validation note (2026-09-24): Backend tests passed (84/84), frontend tests passed
+(83/83), production build passed, and `git diff --check` passed. The isolated
+browser smoke verified account registration, group creation, and matching
+Dashboard/Forecast budget and spend values. Manual previous-month copy remains
+pending.
 
 ---
 
 ### 2.7 Budget Threshold Notifications
 
-**Status:** `[ ] PENDING`
+**Status:** `[~] IN PROGRESS — in-app/browser alerts implemented; background delivery remains undecided`
 
 Planned scope:
 - Alert when shared spending reaches configured budget thresholds.
-- Push and/or email delivery.
+- Browser notifications and in-app alerts while SharedSpend is open.
+- Default thresholds are 80% and 100%; the user opts in from Settings.
 - Avoid duplicate notifications.
-- Consider weekly/monthly summary notifications.
+- Weekly/monthly summaries are not implemented.
 
 Dependencies/decisions:
-- [ ] Choose notification provider
-- [ ] Define threshold values
-- [ ] Define notification preferences
-- [ ] Define email/push credentials
-- [ ] Define background-job mechanism
+- [ ] Choose a provider for email/background push delivery
+- [x] Define threshold values (80% and 100%)
+- [x] Define opt-in preference and per-user/group/month duplicate suppression
+- [ ] Configure credentials and background-job delivery if email/push is required
+
+Known limitation: Alerts appear only while the app is open. The preference and
+deduplication state are stored on the current browser/device, not in the shared
+database. This does not provide cross-device or background delivery.
 
 This should be implemented after core budget functionality is stable.
 
@@ -284,7 +300,7 @@ This should be implemented after core budget functionality is stable.
 
 ### 2.8 Dark Mode
 
-**Status:** `[ ] PENDING`
+**Status:** `[~] IN PROGRESS — toggle and persisted theme pass automated checks; visual review pending`
 
 Planned scope:
 - Theme toggle.
@@ -293,40 +309,36 @@ Planned scope:
 - Check charts, dropdowns, forms and dialogs.
 
 Acceptance criteria:
-- [ ] Theme toggle
-- [ ] Persisted preference
-- [ ] Dashboard verified
-- [ ] Transactions verified
-- [ ] Analytics/charts verified
-- [ ] Settings verified
+- [x] Theme toggle
+- [x] Persisted device preference
+- [ ] Dashboard verified visually
+- [ ] Transactions verified visually
+- [ ] Analytics/charts verified visually
+- [ ] Settings verified visually
 - [ ] Mobile verified
-- [ ] Build/tests pass
+- [x] Build/tests pass
 
 ---
 
 ### 2.9 E2E / Phase 2 Quality Gate
 
-**Status:** `[ ] PENDING`
+**Status:** `[~] IN PROGRESS — cross-screen API integration scenario passes; browser E2E/manual review pending`
 
 Although E2E was originally listed separately from the Phase 2 feature list,
 it should be treated as a Phase 2 quality gate before declaring Phase 2
 complete.
 
 Planned critical flows:
-- [ ] Register/login
-- [ ] Create/join group
-- [ ] Switch groups
-- [ ] Set budget
-- [ ] Add shared transaction
-- [ ] Add personal transaction
-- [ ] Edit transaction/date
-- [ ] Categorization
-- [ ] Analytics
-- [ ] Forecast
-- [ ] Settlement
-- [ ] CSV export
-- [ ] Budget copy
-- [ ] Dark mode
+- [x] Register/login and two-user group membership through real API routes
+- [x] Create/join groups and verify group-scoped queries
+- [x] Set budget and verify Dashboard/Analytics/Forecast responses
+- [x] Add shared and personal transactions; verify date/search/payer filters
+- [x] Analytics, forecast, CSV filtering, privacy, and empty results
+- [x] Settlement in both directions, source/history linkage, and debtor payment visibility
+- [x] Admin authorization and migration/schema tests
+- [x] XLSX bytes parse as a real workbook in the frontend test
+- [x] Budget copy API and dark-mode preference tests
+- [ ] Browser-driven E2E and manual visual/download verification
 
 ---
 
@@ -343,7 +355,29 @@ Phase 2 should not be marked complete until:
 - [ ] No accidental debug/mock code
 - [ ] Git working tree reviewed
 - [ ] Documentation updated
-- [ ] Tested commits promoted from `SharedSpend-clone` to private `SharedSpend`
+- [ ] User-approved release/promotion step (outside this development-only review; do not modify the private repository)
+
+Regression validation note (2026-09-24): The real API integration scenario covers
+two authenticated users and two groups across budget, transactions, analytics,
+forecast, privacy, CSV, settlement and source/payment linkage. An isolated
+browser smoke covered registration, group creation, budget save, transaction
+creation, and Dashboard/Forecast consistency. It caught a conditional-hook bug
+in the new alert effect; that bug was fixed and covered by a Dashboard render
+transition test. Full backend and frontend automated suites and the production
+build pass. Phase 2 remains open for manual export/copy/theme review and a
+decision on background notification delivery. No live PostgreSQL/Neon instance
+was available for integration tests.
+
+Environment caveat: the pre-existing services on `localhost:5173` and
+`localhost:8000` were already running and displayed a budget discrepancy
+(Settings and Forecast showed the saved budget while Dashboard showed “Not
+set”). Those services were not started from this test run, so their code and
+database could not be validated safely. The current checkout, running against
+an isolated temporary SQLite database, showed consistent Dashboard and Forecast
+budget/spend values. A temporary test account (`review_ale`), group
+(`Review Household`), and ₹1,000 budget were created in the pre-existing local
+app during the initial port-collision attempt; the test account was signed out
+and those rows were left untouched.
 
 **Next implementation after this baseline:** CSV Export.
 
@@ -522,8 +556,11 @@ This track is independent of feature phases and should be revisited before
 public/end-user release.
 
 - [ ] Strong production `SECRET_KEY`
-- [ ] Production database strategy
-- [ ] PostgreSQL migration if required
+- [~] Shared PostgreSQL configuration, additive Alembic migration, global admin
+  APIs and admin UI implemented; actual PostgreSQL/Neon integration still needs
+  verification against a live database.
+- [~] PostgreSQL migration generated in offline mode and SQLite migration
+  executed successfully; live PostgreSQL migration remains unverified.
 - [ ] Production CORS configuration
 - [ ] HTTPS/TLS
 - [ ] Database backup strategy
@@ -575,3 +612,16 @@ reference; this file tracks what has actually been implemented.
 - Confirmed next planned implementation: **CSV Export**.
 - Phase 2 features already completed: Multiple Groups, Settlement,
   AI/Categorization work, Analytics/Insights/Forecast work.
+
+## 2026-09-24
+
+- Added `asyncpg==0.31.0`, PostgreSQL `DATABASE_URL` support, Neon pooler
+  connection handling, and an additive Alembic revision for admin and settlement
+  schema fields.
+- Added controlled global-admin promotion, protected user management and
+  database migration-health APIs, and a simple admin UI.
+- Backend tests passed: 77/77. Frontend tests passed: 73/73. Production build
+  passed. `git diff --check` passed.
+- SQLite Alembic upgrade passed; PostgreSQL offline Alembic SQL generation
+  passed. No live PostgreSQL/Neon database was configured, so PostgreSQL
+  integration is not verified and the foundation remains IN PROGRESS.

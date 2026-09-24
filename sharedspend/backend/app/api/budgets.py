@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +37,30 @@ async def list_budgets(
         select(BudgetPeriod).where(BudgetPeriod.group_id == group_id)
     )
     return result.scalars().all()
+
+
+@router.get(
+    "/groups/{group_id}/budgets/{year}/{month}/previous",
+    response_model=BudgetOut | None,
+)
+async def get_previous_budget(
+    group_id: str,
+    year: int,
+    month: int = Path(..., ge=1, le=12),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the previous calendar month's budget for review before copying."""
+    await _require_member(db, group_id, current_user.id)
+    previous_year, previous_month = (year - 1, 12) if month == 1 else (year, month - 1)
+    result = await db.execute(
+        select(BudgetPeriod).where(
+            BudgetPeriod.group_id == group_id,
+            BudgetPeriod.year == previous_year,
+            BudgetPeriod.month == previous_month,
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 @router.post("/groups/{group_id}/budgets", response_model=BudgetOut, status_code=status.HTTP_201_CREATED)

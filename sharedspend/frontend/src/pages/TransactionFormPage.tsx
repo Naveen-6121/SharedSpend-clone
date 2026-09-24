@@ -88,9 +88,12 @@ export function TransactionFormPage() {
         category_id: existing.category_id,
         group_id: existing.group_id,
         payer_id: existing.payer_id,
-        notes: existing.notes,
-        add_to_settlement: existing.add_to_settlement ?? false,
-      })
+      notes: existing.notes,
+      add_to_settlement: existing.add_to_settlement ?? false,
+    })
+    if (existing.settlement_participant_ids) {
+      setParticipantIds(new Set(existing.settlement_participant_ids))
+    }
     }
   }, [existing, reset])
 
@@ -114,9 +117,13 @@ export function TransactionFormPage() {
   // When members load, default all members as participants
   useEffect(() => {
     if (members && members.length > 0) {
-      setParticipantIds(new Set(members.map((m) => m.user_id)))
+      setParticipantIds((current) =>
+        isEdit && existing?.settlement_participant_ids
+          ? new Set(existing.settlement_participant_ids)
+          : current.size > 0 ? current : new Set(members.map((m) => m.user_id))
+      )
     }
-  }, [members])
+  }, [members, isEdit, existing])
 
   // Smart categorize with debounce
   const suggestCategory = useCallback(async (desc: string) => {
@@ -152,6 +159,12 @@ export function TransactionFormPage() {
       category_id: data.category_id || null,
       notes: data.notes || null,
       add_to_settlement: data.type === 'PERSONAL' ? (data.add_to_settlement ?? false) : false,
+      settlement_group_id: data.type === 'PERSONAL' && data.add_to_settlement
+        ? activeGroup?.id ?? null
+        : null,
+      settlement_participant_ids: data.type === 'PERSONAL' && data.add_to_settlement
+        ? Array.from(new Set([...participantIds, data.payer_id!]))
+        : null,
     }
     if (isEdit) {
       updateMutation.mutate(payload, { onSuccess: () => navigate('/transactions') })
@@ -291,15 +304,15 @@ export function TransactionFormPage() {
                   onChange={(e) => setValue('payer_id', e.target.value || null)}
                   aria-required="true"
                   aria-describedby={errors.payer_id ? 'payer-error' : undefined}
-                  className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">
+                  <option value="" className="bg-popover text-popover-foreground">
                     {!members?.length
                       ? 'No group members — join a group first'
                       : 'Who paid?'}
                   </option>
                   {members?.map((m) => (
-                    <option key={m.user_id} value={m.user_id}>
+                    <option key={m.user_id} value={m.user_id} className="bg-popover text-popover-foreground">
                       {m.display_name || m.username || m.user_id}
                     </option>
                   ))}
@@ -348,7 +361,8 @@ export function TransactionFormPage() {
                             <input
                               type="checkbox"
                               className="h-3.5 w-3.5 rounded border-input accent-primary"
-                              checked={checked}
+                              checked={checked || m.user_id === watch('payer_id')}
+                              disabled={m.user_id === watch('payer_id')}
                               onChange={(e) => {
                                 const next = new Set(participantIds)
                                 if (e.target.checked) next.add(m.user_id)
@@ -381,11 +395,11 @@ export function TransactionFormPage() {
                   setValue('category_id', e.target.value || null)
                   setSuggestion(null)
                 }}
-                className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">Select category (optional)</option>
+                <option value="" className="bg-popover text-popover-foreground">Select category (optional)</option>
                 {categories?.map((c) => (
-                  <option key={c.id} value={c.id}>
+                  <option key={c.id} value={c.id} className="bg-popover text-popover-foreground">
                     {c.icon} {c.name}
                   </option>
                 ))}
