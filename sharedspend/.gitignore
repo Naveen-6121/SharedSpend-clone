@@ -42,6 +42,8 @@ frontend/dist/
 frontend/dist-ssr/
 frontend/.cache/
 frontend/build/
+frontend/test-results/
+.pnpm-store/
 
 # TypeScript incremental build info
 frontend/tsconfig.tsbuildinfo
