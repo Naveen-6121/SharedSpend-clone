@@ -70,7 +70,7 @@ claim that Neon cold starts or network latency have been eliminated.
 | SECRET_KEY | (required) | JWT signing key |
 | ACCESS_TOKEN_EXPIRE_MINUTES | 15 | Access token TTL |
 | REFRESH_TOKEN_EXPIRE_DAYS | 7 | Refresh token TTL |
-| CORS_ORIGINS | http://localhost:5173 | Allowed CORS origins (comma-separated) |
+| CORS_ORIGINS | Local development defaults to http://localhost:5173; required in production | Allowed HTTPS site origins in production (comma-separated) |
 
 ## Shared PostgreSQL with Neon
 
@@ -206,9 +206,18 @@ Set these backend environment variables in Render:
 - `SECRET_KEY`: a strong random value with at least 32 characters.
 - `ACCESS_TOKEN_EXPIRE_MINUTES=15`
 - `REFRESH_TOKEN_EXPIRE_DAYS=7`
-- `CORS_ORIGINS`: the exact HTTPS origin of the deployed frontend, without a
+- `CORS_ORIGINS`: one or more comma-separated HTTPS site origins, without a
   path, trailing slash, wildcard, or localhost. The Blueprint leaves this as a
   dashboard-supplied value because the static-site URL is assigned by Render.
+
+The `sync: false` CORS setting has no committed origin. After Render assigns the
+static site's URL, set the backend service's `CORS_ORIGINS` in the Dashboard to
+that exact HTTPS origin (scheme and host only), then redeploy the backend. For
+an existing Blueprint, update this value in the service's Environment settings;
+Render does not resync `sync: false` values on later Blueprint updates. A
+missing or invalid production origin fails closed with a setup error; the local
+Vite origin is supplied only when running in development. Do not leave a
+temporary bootstrap origin in place for normal use.
 
 Production startup rejects the development signing key, SQLite, a short secret,
 and wildcard, localhost, or non-HTTPS CORS origins. The local SQLite defaults
@@ -237,11 +246,15 @@ frontend domain, update backend `CORS_ORIGINS` to that exact origin.
    not push or deploy. In Render, create a Blueprint from that repository and
    select `sharedspend/render.yaml`.
 2. Enter the existing Neon URL and a strong random `SECRET_KEY` directly in the
-   Render dashboard. Never put either value in Git, this README, or logs. Enter
-   the exact frontend HTTPS origin for `CORS_ORIGINS`. Render assigns that URL
-   during service creation; if the prompt appears before the URL is visible,
-   use a temporary `https://pending.invalid` value, complete creation, then
-   replace it with the actual frontend URL before normal use.
+   Render dashboard. Never put either value in Git, this README, or logs. Set
+   `CORS_ORIGINS` to the static site's exact HTTPS origin as soon as Render
+   assigns it. If Render requests this dashboard-only value before the frontend
+   URL exists, leave it unset if the form permits; the backend will remain
+   stopped until the real origin is entered. If Render requires a temporary
+   value to create the services, use an explicit HTTPS validation origin only
+   in the dashboard and replace it with the assigned frontend URL before
+   allowing frontend API traffic. Never commit a temporary origin as production
+   configuration.
 3. After both services report Live, verify the backend `/health` returns HTTP
    200 and the frontend login route loads. Confirm the frontend's
    `VITE_API_BASE_URL` resolves to the backend URL and backend CORS lists the

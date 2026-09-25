@@ -22,6 +22,17 @@ def test_valid_explicit_production_settings_are_accepted():
     assert settings.CORS_ORIGINS == "https://sharedspend.example.invalid"
 
 
+def test_render_https_origin_is_accepted_for_production_validation():
+    settings = production_settings(CORS_ORIGINS="https://example.com")
+
+    assert settings.cors_origins_list == ["https://example.com"]
+
+
+def test_missing_production_cors_origin_fails_with_setup_guidance():
+    with pytest.raises(ValueError, match="must be set to the frontend HTTPS origin"):
+        production_settings(CORS_ORIGINS="")
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -31,6 +42,7 @@ def test_valid_explicit_production_settings_are_accepted():
         {"DATABASE_URL": "sqlite+aiosqlite:///./sharedspend.db"},
         {"CORS_ORIGINS": "*"},
         {"CORS_ORIGINS": "http://localhost:5173"},
+        {"CORS_ORIGINS": "https://localhost:5173"},
         {"CORS_ORIGINS": "https://sharedspend.example.invalid/path"},
     ],
 )
@@ -44,6 +56,7 @@ def test_development_defaults_remain_available_for_local_sqlite():
 
     assert settings.APP_ENV == "development"
     assert settings.is_sqlite
+    assert settings.cors_origins_list == ["http://localhost:5173"]
 
 
 def test_production_configuration_error_does_not_echo_secrets_or_database_url():

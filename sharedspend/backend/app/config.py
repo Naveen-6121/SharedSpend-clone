@@ -18,7 +18,9 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    CORS_ORIGINS: str = "http://localhost:5173"
+    # An empty value lets development use its local Vite origin while forcing
+    # production to provide the deployed frontend origin explicitly.
+    CORS_ORIGINS: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -39,7 +41,11 @@ class Settings(BaseSettings):
             raise ValueError("production requires a PostgreSQL DATABASE_URL")
 
         origins = self.cors_origins_list
-        if not origins or "*" in origins:
+        if not origins:
+            raise ValueError(
+                "production CORS_ORIGINS must be set to the frontend HTTPS origin"
+            )
+        if "*" in origins:
             raise ValueError("production CORS_ORIGINS must list explicit frontend origins")
         for origin in origins:
             parsed = urlsplit(origin)
@@ -94,7 +100,10 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> List[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        if not origins and self.APP_ENV.lower() != "production":
+            return ["http://localhost:5173"]
+        return origins
 
 
 settings = Settings()

@@ -19,6 +19,8 @@ services:
         value: "15"
       - key: REFRESH_TOKEN_EXPIRE_DAYS
         value: "7"
+      # Set to the static site's assigned HTTPS origin in the Render Dashboard.
+      # Keep dashboard-managed so no unknown frontend URL is committed here.
       - key: CORS_ORIGINS
         sync: false
 
