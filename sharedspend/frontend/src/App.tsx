@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
@@ -7,20 +8,26 @@ import { RequireAuth } from '@/components/RequireAuth'
 import { RequireAdmin } from '@/components/RequireAdmin'
 import { AppShell } from '@/components/AppShell'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { LoginPage } from '@/pages/LoginPage'
-import { RegisterPage } from '@/pages/RegisterPage'
-import { DashboardPage } from '@/pages/DashboardPage'
-import { TransactionsPage } from '@/pages/TransactionsPage'
-import { TransactionFormPage } from '@/pages/TransactionFormPage'
-import { AnalyticsPage } from '@/pages/AnalyticsPage'
-import { SettlementPage } from '@/pages/SettlementPage'
-import { SettingsPage } from '@/pages/SettingsPage'
-import { GroupSettingsPage, CreateGroupPage } from '@/pages/GroupPages'
-import { CategoriesPage } from '@/pages/CategoriesPage'
-import { ProfilePage } from '@/pages/ProfilePage'
-import { NotFoundPage } from '@/pages/NotFoundPage'
-import { AdminPage } from '@/pages/AdminPage'
 import { ThemeProvider } from '@/context/ThemeContext'
+
+const LoginPage = lazy(() => import('@/pages/LoginPage').then((page) => ({ default: page.LoginPage })))
+const RegisterPage = lazy(() => import('@/pages/RegisterPage').then((page) => ({ default: page.RegisterPage })))
+const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((page) => ({ default: page.DashboardPage })))
+const TransactionsPage = lazy(() => import('@/pages/TransactionsPage').then((page) => ({ default: page.TransactionsPage })))
+const TransactionFormPage = lazy(() => import('@/pages/TransactionFormPage').then((page) => ({ default: page.TransactionFormPage })))
+const AnalyticsPage = lazy(() => import('@/pages/AnalyticsPage').then((page) => ({ default: page.AnalyticsPage })))
+const SettlementPage = lazy(() => import('@/pages/SettlementPage').then((page) => ({ default: page.SettlementPage })))
+const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((page) => ({ default: page.SettingsPage })))
+const GroupSettingsPage = lazy(() => import('@/pages/GroupPages').then((page) => ({ default: page.GroupSettingsPage })))
+const CreateGroupPage = lazy(() => import('@/pages/GroupPages').then((page) => ({ default: page.CreateGroupPage })))
+const CategoriesPage = lazy(() => import('@/pages/CategoriesPage').then((page) => ({ default: page.CategoriesPage })))
+const ProfilePage = lazy(() => import('@/pages/ProfilePage').then((page) => ({ default: page.ProfilePage })))
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((page) => ({ default: page.NotFoundPage })))
+const AdminPage = lazy(() => import('@/pages/AdminPage').then((page) => ({ default: page.AdminPage })))
+
+function RouteLoading() {
+  return <div role="status" className="p-6 text-sm text-muted-foreground">Loading page…</div>
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,9 +44,10 @@ const queryClient = new QueryClient({
 
 function AuthenticatedApp() {
   return (
-    <GroupProvider>
-      <AppShell>
-        <Routes>
+      <GroupProvider>
+        <AppShell>
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/transactions/new" element={<TransactionFormPage />} />
@@ -53,7 +61,8 @@ function AuthenticatedApp() {
           <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
           <Route path="/groups/new" element={<CreateGroupPage />} />
           <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+          </Routes>
+        </Suspense>
       </AppShell>
     </GroupProvider>
   )
@@ -66,7 +75,8 @@ export default function App() {
         <ThemeProvider>
           <AuthProvider>
             <BrowserRouter>
-            <Routes>
+              <Suspense fallback={<RouteLoading />}>
+                <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="*" element={
@@ -76,7 +86,8 @@ export default function App() {
                   </ErrorBoundary>
                 </RequireAuth>
               } />
-            </Routes>
+                </Routes>
+              </Suspense>
             </BrowserRouter>
             <Toaster richColors position="top-right" closeButton />
           </AuthProvider>

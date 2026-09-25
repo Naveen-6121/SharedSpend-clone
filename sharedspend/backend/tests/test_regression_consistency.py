@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
+from uuid import uuid4
 
 from httpx import AsyncClient
 
@@ -30,15 +31,29 @@ async def _create_tx(client, tokens, payload):
     return response.json()
 
 
-async def test_cross_screen_group_period_visibility_and_budget_consistency(client: AsyncClient):
+async def exercise_cross_screen_group_period_visibility_and_budget_consistency(
+    client: AsyncClient, run_id: str
+):
     """Use real API routes and one DB fixture like a two-user/two-group app session."""
-    owner = await register_user(client, "regression_owner")
-    member = await register_user(client, "regression_member")
-    outsider = await register_user(client, "regression_outsider")
+    owner_username = f"regression_owner_{run_id}"
+    member_username = f"regression_member_{run_id}"
+    owner = await register_user(client, owner_username)
+    member = await register_user(client, member_username)
+    outsider = await register_user(client, f"regression_outsider_{run_id}")
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"username": owner_username, "password": "test1234"},
+    )
+    assert login.status_code == 200, login.text
+    owner = login.json()
     owner_id = (await client.get("/api/v1/users/me", headers=auth_headers(owner))).json()["id"]
     member_id = (await client.get("/api/v1/users/me", headers=auth_headers(member))).json()["id"]
-    group_one = await _make_group(client, owner, "regression_member", "Primary home")
-    group_two = await _make_group(client, owner, "regression_member", "Holiday home")
+    group_one = await _make_group(
+        client, owner, member_username, f"Primary home {run_id}"
+    )
+    group_two = await _make_group(
+        client, owner, member_username, f"Holiday home {run_id}"
+    )
     today = date.today()
 
     groups = await client.get("/api/v1/groups", headers=auth_headers(member))
@@ -62,6 +77,24 @@ async def test_cross_screen_group_period_visibility_and_budget_consistency(clien
         headers=auth_headers(owner),
     )
     assert float(copied.json()["amount"]) == 800.0
+    # Exercise the second half of the UI flow: review the copied value, save it
+    # to the current period, then verify both group members see the same budget.
+    saved_copy = await client.put(
+        f"/api/v1/groups/{group_one}/budgets/{today.year}/{today.month}",
+        json={"amount": copied.json()["amount"]},
+        headers=auth_headers(owner),
+    )
+    assert saved_copy.status_code == 200
+    assert float(saved_copy.json()["amount"]) == 800.0
+    saved_budgets = await client.get(
+        f"/api/v1/groups/{group_one}/budgets", headers=auth_headers(member)
+    )
+    current_budgets = [
+        row for row in saved_budgets.json()
+        if row["year"] == today.year and row["month"] == today.month
+    ]
+    assert len(current_budgets) == 1
+    assert float(current_budgets[0]["amount"]) == 800.0
     missing_copy = await client.get(
         f"/api/v1/groups/{group_two}/budgets/{today.year}/{today.month}/previous",
         headers=auth_headers(owner),
@@ -145,8 +178,8 @@ async def test_cross_screen_group_period_visibility_and_budget_consistency(clien
     member_summary = await client.get(
         f"/api/v1/analytics/summary?{query}", headers=auth_headers(member)
     )
-    assert float(owner_summary.json()["budget"]) == 1000.0
-    assert float(member_summary.json()["budget"]) == 1000.0
+    assert float(owner_summary.json()["budget"]) == 800.0
+    assert float(member_summary.json()["budget"]) == 800.0
     assert float(owner_summary.json()["shared_spent"]) == 500.0
     assert float(member_summary.json()["shared_spent"]) == 500.0
     assert float(owner_summary.json()["personal_by_member"][0]["personal_spent"]) == 120.0
@@ -177,7 +210,7 @@ async def test_cross_screen_group_period_visibility_and_budget_consistency(clien
     forecast = await client.get(
         f"/api/v1/analytics/forecast?{query}", headers=auth_headers(owner)
     )
-    assert float(forecast.json()["budget"]) == 1000.0
+    assert float(forecast.json()["budget"]) == 800.0
     assert float(forecast.json()["projected_spend"]) >= 500.0
     assert forecast.json()["on_track"] is False or forecast.json()["on_track"] is True
 
@@ -188,6 +221,16 @@ async def test_cross_screen_group_period_visibility_and_budget_consistency(clien
     member_row = next(row for row in member_stats.json() if row["user_id"] == member_id)
     assert float(owner_row["personal_spent"]) == 120.0
     assert member_row["personal_spent"] is None
+
+    insights = await client.get(
+        f"/api/v1/analytics/insights?{query}", headers=auth_headers(owner)
+    )
+    assert insights.status_code == 200, insights.text
+    assert float(insights.json()["highest_category"]["amount"]) == 620.0
+    assert float(insights.json()["highest_day"]["amount"]) == 620.0
+    assert "Member private coffee" not in {
+        row["description"] for row in insights.json()["largest_transactions"]
+    }
 
     source = await _create_tx(client, owner, {
         "date": str(today), "amount": "867.00", "description": "Primary movie",
@@ -249,3 +292,11 @@ async def test_cross_screen_group_period_visibility_and_budget_consistency(clien
         assert denied.status_code == 403, (endpoint, denied.text)
 
     assert shared_two["id"] not in {row["id"] for row in owner_rows.json()}
+
+
+async def test_cross_screen_group_period_visibility_and_budget_consistency(
+    client: AsyncClient,
+):
+    await exercise_cross_screen_group_period_visibility_and_budget_consistency(
+        client, uuid4().hex[:8]
+    )

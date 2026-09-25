@@ -53,7 +53,10 @@ def upgrade() -> None:
     )
     rows = bind.execute(
         sa.select(tx.c.id, tx.c.payer_id, tx.c.recorded_by_id).where(
-            tx.c.type == "PERSONAL", tx.c.add_to_settlement.is_(True)
+            # PostgreSQL stores transaction_type as a native enum. Cast it so
+            # the migration predicate compares like types on PostgreSQL and SQLite.
+            sa.cast(tx.c.type, sa.String) == "PERSONAL",
+            tx.c.add_to_settlement.is_(True),
         )
     ).all()
     for row in rows:

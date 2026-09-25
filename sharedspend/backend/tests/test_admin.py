@@ -112,7 +112,7 @@ async def test_admin_database_status_is_protected_and_redacted(client: AsyncClie
 def test_postgresql_urls_use_asyncpg_and_sqlite_remains_unchanged():
     neon_url = "postgresql://app:secret@ep-example.neon.tech/sharedspend?sslmode=require"
     assert Settings(DATABASE_URL=neon_url).async_database_url == (
-        "postgresql+asyncpg://app:secret@ep-example.neon.tech/sharedspend?sslmode=require"
+        "postgresql+asyncpg://app:secret@ep-example.neon.tech/sharedspend?ssl=require"
     )
     sqlite_url = "sqlite+aiosqlite:///./sharedspend.db"
     settings = Settings(DATABASE_URL=sqlite_url)

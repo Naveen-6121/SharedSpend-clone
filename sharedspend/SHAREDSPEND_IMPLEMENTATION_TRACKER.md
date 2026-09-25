@@ -7,7 +7,7 @@
 > **Source:** Based on the existing `# SharedSpend — Implementation Plan.txt`,
 > the existing `sharedspend-handoff.docx`, and the implementation decisions
 > already made during development. Current status entries reflect the latest
-> recorded implementation and validation as of September 24, 2026.
+> recorded implementation and validation as of September 25, 2026.
 
 ---
 
@@ -60,24 +60,24 @@ normal development workflow.
 
 ## Environment / baseline
 
-- [x] Backend suite last recorded: **84 passed** on 2026-09-24.
-- [x] Frontend suite last recorded: **91 passed** on 2026-09-24.
-- [x] Frontend TypeScript/Vite production build passed; Vite reported a large main-chunk warning.
-- [x] Real-route API integration coverage exists for two users and two groups.
-- [ ] Full browser E2E and all remaining manual acceptance checks.
-- [ ] Live PostgreSQL/Neon integration and migration test.
+- [x] Backend suite: **88 passed, 1 skipped** on 2026-09-25 (the skipped test requires explicit live-PostgreSQL opt-in).
+- [x] Frontend suite: **92 passed** on 2026-09-25.
+- [x] Frontend TypeScript/Vite production build passed on 2026-09-25; route-level code splitting keeps the entry and Analytics chunks below 500 kB.
+- [x] Real-route API integration coverage exists for two users and two groups; a two-user Playwright browser E2E passed on 2026-09-25.
+- [x] Browser E2E verified budget copy/save/reload, 80%/100% alerts, shared/personal transaction visibility, Analytics chart modes, forecast, CSV/XLSX downloads, settlement payment/history, dark-mode persistence, and a 390 px viewport.
+- [x] Live PostgreSQL/Neon client-TLS connection, Alembic migration, and API integration passed against the configured Neon database on 2026-09-25; read-only `db-status` confirms Alembic head and the imported two-user data remains unchanged. Production deployment remains unverified.
 
-Latest locally known repository baseline before this documentation update (the live GitHub remote could not be refreshed from this environment):
+Latest locally known committed repository baseline before this continuation (origin/main matches the local ref; live GitHub state was not independently fetched this turn):
 
 ```text
 Branch: main
-Local main/origin/main commit: 77f7183 docs: update backend environment example (live remote tip not independently refreshed)
+Local main/origin/main commit: 87c40183 docs: update SharedSpend project documentation (local tracking ref matches; live remote tip has not been independently refreshed this turn)
 Application implementation commit: 18d6fe3 feat: update SharedSpend core features and UI
-Local ref: origin/main at 77f7183 (remote tip not independently refreshed)
-Working tree: clean before this documentation-only update
+Local ref: origin/main at 87c40183 (remote tip not independently refreshed this turn)
+Working tree: contains uncommitted PostgreSQL compatibility, analytics query optimization, lazy route loading, Playwright setup, tests, and documentation changes
 ```
 
-The test results above are the latest recorded validation for the application changes. Documentation-only commit `77f7183` followed those checks; no application source changed after the application implementation commit.
+Current validation on 2026-09-25: backend suite 88 passed / 1 opt-in live-PostgreSQL test skipped (327 SQLite/JWT warnings); the live Neon test separately passed (1 passed, 52 JWT deprecation warnings). Frontend suite 92 passed; TypeScript/Vite production build passed. The Playwright E2E passed against an isolated SQLite test database using two real browser contexts. Read-only Neon `db-status` reported TLS enabled, Alembic at `f54d2e96b1c7`/head, and 2 users, 1 group, and 57 transactions before the live fixture test; the test cleaned up its own uniquely named rows. The prior read-only SQLite/Neon comparison verified IDs and relationships for Naveen and Alekhya, group/memberships, 57 transactions, budget, settlements, group categories, and reused global categories. No production readiness is implied.
 ---
 
 # 3. Phase 1 — MVP
@@ -205,7 +205,7 @@ projected_spend =
 
 ### 2.5 CSV Export
 
-**Status:** `[~] IN PROGRESS — implementation and automated checks verified; user-reported manual download check is recorded, independent browser/file inspection remains unverified`
+**Status:** `[x] DONE — endpoint and UI are implemented; filtered CSV and downloaded CSV/XLSX files are verified`
 
 Planned scope:
 - Export filtered transactions as CSV.
@@ -232,15 +232,15 @@ Acceptance criteria:
 - [x] Backend tests — filtered export, authorization, empty output, headers, date and decimal amounts
 - [x] Frontend tests — request filters and download behavior
 - [x] Production build — passed
-- [x] User-reported manual check: CSV export works correctly. The automated browser harness did not capture the download event, so the file was not independently inspected by that harness.
+- [x] Playwright E2E captured and parsed the downloaded CSV and XLSX files, including expected header/data.
 
-Validation note (2026-09-24): Backend tests passed (84/84), frontend tests passed (91/91), production build passed with the large-chunk warning, and `git diff --check` passed. The API integration test covers filters, authorization/privacy, empty results, headers, dates, and decimal amounts.
+Validation note (2026-09-25): API coverage verifies filters, authorization/privacy, empty results, headers, dates, and decimal amounts. The two-user browser E2E independently downloaded and parsed both formats. Backend 88 passed/1 skipped, frontend 92 passed, and production build passed.
 
 ---
 
 ### 2.6 Budget Copy / Carry Forward
 
-**Status:** `[~] IN PROGRESS — API/UI implemented and automated checks pass; manual UI verification pending`
+**Status:** `[x] DONE — API and UI implemented; two-user browser save/reload and cross-screen consistency verified`
 
 Planned scope:
 - Carry the previous month's budget into the next month.
@@ -254,20 +254,19 @@ Acceptance criteria:
 - [x] Frontend action fills the editable amount; the user must save explicitly
 - [x] Existing current-period budgets are updated through the existing upsert, not duplicated
 - [x] API and cross-screen integration tests
+- [x] Frontend interaction test verifies copying only fills the form and explicit Update saves via the current-period upsert
+- [x] Neon real-route integration saves the copied value and confirms it is visible to both members and Analytics/Forecast
 - [x] Build
-- [ ] Manual verification
+- [x] Manual copy action verified in the isolated browser smoke: previous month amount filled the editable field and was not saved automatically
+- [x] Browser E2E copied the previous amount, explicitly saved it, reloaded, and confirmed the persisted value through the second user and analytics screens.
 
-Validation note (2026-09-24): Backend tests passed (84/84), frontend tests passed
-(91/91), production build passed, and `git diff --check` passed. The isolated
-browser smoke verified account registration, group creation, and matching
-Dashboard/Forecast budget and spend values. The previous-month copy interaction
-has not been manually verified end to end.
+Validation note (2026-09-25): Component and API tests verify that copy only fills the editable field until Update. The Playwright two-user browser flow saved the copied amount, reloaded the settings screen, and checked the two-member Dashboard/Analytics/Forecast values. The live Neon route test covers a real two-user budget upsert and cross-screen consistency. Backend 88 passed/1 skipped; frontend 92 passed; build passed.
 
 ---
 
 ### 2.7 Budget Threshold Notifications
 
-**Status:** `[~] IN PROGRESS — in-app/browser alerts implemented; background delivery scope remains undecided`
+**Status:** `[x] DONE for agreed app-open scope — opt-in in-app/browser alerts implemented and browser-verified`
 
 Planned scope:
 - Alert when shared spending reaches configured budget thresholds.
@@ -276,23 +275,25 @@ Planned scope:
 - Avoid duplicate notifications.
 - Weekly/monthly summaries are not implemented.
 
-Dependencies/decisions:
-- [ ] Choose a provider for email/background push delivery
+Scope boundary:
+- Background email/push delivery is not part of the agreed friends/family app-open alert scope. It remains a future decision and is not counted as incomplete Phase 2 work.
 - [x] Define threshold values (80% and 100%)
 - [x] Define opt-in preference and per-user/group/month duplicate suppression
-- [ ] Configure credentials and background-job delivery if email/push is required
 
 Known limitation: Alerts appear only while the app is open. The preference and
 deduplication state are stored on the current browser/device, not in the shared
 database. This does not provide cross-device or background delivery.
 
-This should be implemented after core budget functionality is stable.
+Verification: the Playwright flow opted in, crossed 80% and 100% of the shared
+budget, and observed both alerts in a two-user group scenario. Utility tests
+cover threshold deduplication and reset behavior. No background service is
+claimed.
 
 ---
 
 ### 2.8 Dark Mode
 
-**Status:** `[~] IN PROGRESS — toggle, persistence, and dropdown styling are implemented and tested; full visual/mobile review pending`
+**Status:** `[x] DONE — theme toggle and persistence verified; chart rendering and responsive layout covered in browser E2E`
 
 Planned scope:
 - Theme toggle.
@@ -303,18 +304,16 @@ Planned scope:
 Acceptance criteria:
 - [x] Theme toggle
 - [x] Persisted device preference
-- [ ] Dashboard verified visually
-- [ ] Transactions verified visually
-- [ ] Analytics/charts verified visually
-- [ ] Settings verified visually
-- [ ] Mobile verified
+- [x] Dashboard, Transactions, Analytics, and Settings reviewed in desktop dark mode in the isolated browser smoke
+- [x] Analytics pie and daily/monthly/yearly bars render; dark-mode pie and daily bars render in browser E2E.
+- [x] Responsive layout checked at 390 px with no horizontal overflow.
 - [x] Build/tests pass
 
 ---
 
 ### 2.9 E2E / Phase 2 Quality Gate
 
-**Status:** `[~] IN PROGRESS — real-route API integration scenarios pass; browser E2E/manual review pending`
+**Status:** `[x] DONE — real-route integration and two-user browser E2E quality gate passed`
 
 Although E2E was originally listed separately from the Phase 2 feature list,
 it should be treated as a Phase 2 quality gate before declaring Phase 2
@@ -330,36 +329,43 @@ Planned critical flows:
 - [x] Admin authorization and migration/schema tests
 - [x] XLSX bytes parse as a real workbook in the frontend test
 - [x] Budget copy API and dark-mode preference tests
-- [ ] Browser-driven E2E and manual visual/download verification
+- [x] Playwright browser flow covers two-user registration/login, group invitation/privacy, budget copy/save/reload, shared/personal transactions, dashboard/analytics/forecast consistency, alerts, all chart modes, settlements/payment/history, CSV/XLSX download parsing, dark mode, and a 390 px layout check.
+- [x] Same integration scenario separately passed against live Neon via the opt-in PostgreSQL test; Playwright uses a disposable local SQLite database so it never writes synthetic users into the personal Neon database.
 
 ---
 
 # 5. Phase 2 Completion Gate
 
-Phase 2 should not be marked complete until:
+Phase 2 acceptance gate (friends/family shared web application scope):
 
-- [ ] All agreed Phase 2 features implemented
-- [x] Latest recorded backend tests passed (84/84)
-- [x] Latest recorded frontend tests passed (91/91)
-- [x] Latest recorded frontend production build passed (large-chunk warning remains)
-- [ ] Critical E2E/user flows verified
-- [ ] No known blocker bugs
-- [ ] No accidental debug/mock code
-- [ ] Git working tree reviewed
-- [x] Documentation updated
-- [ ] Remaining manual checks and decisions recorded above; release/promotion is outside this development-only gate
+- [x] All agreed Phase 2 features implemented; background alerts remain explicitly outside the agreed app-open scope.
+- [x] Default backend suite passed (88 passed, 1 opt-in live test skipped); live Neon PostgreSQL test passed separately.
+- [x] Frontend suite passed (92/92); production build passed.
+- [x] Critical two-user browser E2E passed, including real downloads, settlement, alert, and theme flows.
+- [x] No known Phase 2 blocker bug was found during final regression.
+- [x] Working tree and diff check reviewed; no commit or push performed.
+- [x] Documentation updated; production operations and optional background notifications remain separately scoped.
 
-Regression validation note (2026-09-24): The real API integration scenario covers
-two authenticated users and two groups across budget, transactions, analytics,
-forecast, privacy, CSV, settlement and source/payment linkage. An isolated
-browser smoke covered registration, group creation, budget save, transaction
-creation, and Dashboard/Forecast consistency. It caught a conditional-hook bug
-in the alert effect; that bug was fixed and covered by a Dashboard render
-transition test. The latest recorded automated results are backend 84/84,
-frontend 91/91, and production build passed with a chunk-size warning. Phase 2
-remains open for budget-copy and full theme/manual regression checks, plus a
-decision on background notification delivery. No live PostgreSQL/Neon instance
-was available for integration tests.
+Regression validation note (2026-09-25): Default backend pytest passed 88/1 skipped; the separate Neon test passed 1/1 and `db-status` confirmed Alembic head `f54d2e96b1c7`, TLS, and the imported row counts. Frontend tests passed 92/92 and the production build passed. Playwright passed its two-user end-to-end scenario and validated all listed core web flows. Production hosting, backup/restore, security review, and background delivery are outside the Phase 2 gate.
+
+Performance investigation and outcome (2026-09-25): A cold Neon pooled connection plus
+`SELECT 1` took 1.24 seconds (an earlier cold observation was 1.64 seconds); the
+Neon server had only just resumed at that earlier observation, consistent with
+scale-to-zero startup. Keep the Neon PgBouncer-compatible `NullPool` setup; no
+evidence supports changing pooling or adding indexes for the 57-row dataset.
+Dashboard and Analytics requests run concurrently and React Query retains its
+30-second stale window, so a client request waterfall or aggressive refetch was
+not the cause. With a matched authenticated read-only ASGI route probe (two
+samples per route; small and noisy sample), summary changed 1,452→1,372 ms and
+8→4 SQL statements, forecast 1,352→1,092 ms and 4→3 statements, and members
+1,621→1,371 ms and 8→3 statements. Insights changed 1,482→1,688 ms and 7→4
+statements; this small-sample route latency was not an improvement, while its
+SQL elapsed totals were essentially unchanged (1,031→1,058 ms). These figures
+are diagnostics, not performance guarantees; Neon connection/startup and
+network round trips remain measurable contributors. Analytics service query
+consolidation lowers repeated round trips. Lazy route chunks reduce the entry
+bundle from 1,069.45 kB (316.67 kB gzip) to 379.99 kB (119.33 kB gzip); the
+389.68 kB Analytics and 423.99 kB XLSX chunks load only when needed.
 
 Environment caveat: the pre-existing services on `localhost:5173` and
 `localhost:8000` were already running and displayed a budget discrepancy
@@ -372,7 +378,7 @@ budget/spend values. A temporary test account (`review_ale`), group
 app during the initial port-collision attempt; the test account was signed out
 and those rows were left untouched.
 
-**Next priorities:** complete the manual Phase 2 checks listed above, decide alert/admin scope, and test the PostgreSQL foundation against a disposable live PostgreSQL database before claiming shared-database readiness.
+**Phase 2 status:** the agreed friends/family web-app scope and automated quality/E2E gate are complete. Before broader use, separately review production deployment/security/backup, and decide whether background alerts are wanted. Global admin remains an operational control, not a required household feature.
 
 ---
 
@@ -550,10 +556,11 @@ public/end-user release.
 
 - [ ] Strong production `SECRET_KEY`
 - [~] Shared PostgreSQL configuration, additive Alembic migration, global admin
-  APIs and admin UI implemented; actual PostgreSQL/Neon integration still needs
-  verification against a live database.
+  APIs and admin UI implemented; migration and API integration verified against
+  one disposable Neon database; production deployment remains unverified.
 - [~] PostgreSQL migration generated in offline mode and SQLite migration
-  executed successfully; live PostgreSQL migration remains unverified.
+  executed successfully; disposable Neon migration to Alembic head was verified
+  on 2026-09-24. Production migration is not verified.
 - [ ] Production CORS configuration
 - [ ] HTTPS/TLS
 - [ ] Database backup strategy
@@ -566,6 +573,8 @@ public/end-user release.
 - [ ] Frontend deployment
 - [ ] Backend deployment
 - [ ] Production smoke test
+- [x] Render Blueprint prepared for the existing Neon-backed API and Vite static site; configuration is local-only and not deployed.
+- [~] Production CORS remains dependent on setting the exact Render frontend origin in the backend dashboard.
 
 ---
 
@@ -616,15 +625,43 @@ reference; this file tracks what has actually been implemented.
 - Backend tests passed: 77/77. Frontend tests passed: 73/73. Production build
   passed. `git diff --check` passed.
 - SQLite Alembic upgrade passed; PostgreSQL offline Alembic SQL generation
-  passed. No live PostgreSQL/Neon database was configured, so PostgreSQL
-  integration is not verified and the foundation remains IN PROGRESS.
+  passed. Initial implementation had no live PostgreSQL URL. A later 2026-09-24 continuation entry records the successful disposable Neon run; production remains unverified.
 
 
-## 2026-09-24 documentation continuation
+## 2026-09-24 documentation continuation (historical status; superseded by the 2026-09-25 final regression below)
 
 - Reconciled status wording with implementation and validation evidence;
   rule-based categorization is not described as AI/LLM work.
-- Confirmed baseline `main` / `77f7183`; local documentation edits are not part
-  of that pushed commit.
-- Phase 2 remains open for recorded manual checks and unresolved decisions.
+- Confirmed committed baseline `main` / `87c40183`; subsequent PostgreSQL compatibility, safe db-status CLI, and live-test changes are uncommitted.
+- At that date, Phase 2 remained open for recorded manual checks and unresolved decisions; those checks and the app-open alert scope were resolved in the 2026-09-25 final regression below.
 - Phase 3 remains pending; no Phase 3 implementation is recorded.
+
+
+## 2026-09-24 PostgreSQL and Phase 2 continuation (historical test results; superseded by the 2026-09-25 final regression below)
+
+- Normalized PostgreSQL URLs for asyncpg, translating `sslmode` to `ssl` and removing the unsupported `channel_binding` option while preserving TLS requirements. Added conflict validation for contradictory `ssl`/`sslmode` values.
+- Added `python -m app.cli db-status` for safe connection, migration, table, TLS, and core row-count inspection without printing connection credentials or row contents.
+- Added an opt-in live PostgreSQL test for TLS, schema and Alembic head, admin health, persisted rows, and the two-user/two-group real-route integration scenario. It is skipped by default and passed separately against the configured disposable Neon database on 2026-09-24.
+- Current backend suite: 87 passed, 1 skipped; 314 warnings remain (python-jose UTC deprecation and SQLite settlement foreign-key drop-order warnings). Frontend: 91 passed. TypeScript and Vite build pass; existing large bundle warning remains.
+- Isolated local SQLite browser smoke: registration, group creation, budget save, shared transaction, and Dashboard/Analytics/Forecast values checked; prior-month copy button fills editable amount without saving; desktop dark mode reviewed on Dashboard, Transactions, Analytics, and Settings.
+- At that date these browser checks and the background-alert scope decision remained open. They were completed or explicitly scoped in the 2026-09-25 final regression below; production readiness remains a separate track.
+
+- Live disposable Neon verification: client TLS enabled, migrations at `f54d2e96b1c7`, eight expected tables present, and route flow persisted 4 test users, 2 groups, 2 budgets, 4 memberships, 6 transactions, and 1 settled record. The PostgreSQL enum migration required an explicit VARCHAR cast; migration was corrected and rerun successfully. No production claim is made.
+- Historical pre-cleanup Neon test state: After the live API integration scenario, the actual React/Vite app and FastAPI backend were started against the same Neon URL using a process-only random JWT key. Browser registration, group creation, budget save, shared transaction, Dashboard/Analytics/Forecast consistency all passed. `db-status` then showed 5 users, 3 groups, and 7 transactions total. Those were synthetic rows at that time; the later cleanup/import and current counts are recorded below.
+- 2026-09-24 continuation: the SQLite-to-Neon import was applied in one transaction after final preflight. Subsequent read-only verification confirmed Alembic at head `f54d2e96b1c7`, TLS enabled, and exact source-to-target IDs/content and relationships: 2 users (Naveen, Alekhya), 1 group, 2 memberships, 57 transactions, 1 budget, 2 settlements, 7 global categories reused by label, and 2 group-specific categories. Password-hash equality was checked without outputting hashes. The live PostgreSQL route test passed twice, with scoped fixture cleanup; the database's imported records remain. No migration is currently required. Backend 87 passed/1 skipped, frontend 92 passed, production build passed with the existing large-chunk warning. Budget-copy UI behavior is covered by a frontend component test; its save, two-member visibility, and Analytics/Forecast assertions passed through real API routes against Neon. Browser-driven save/reload, automated browser E2E, saved CSV/XLSX inspection, mobile/dark-chart review, and the background-alert scope decision remain open. No production-readiness claim is made.
+
+## 2026-09-25 Phase 2 final regression
+
+- Completed the previously open Phase 2 feature and browser quality-gate checks. The Playwright two-user flow passed with budget copy/save/reload, alerts at 80% and 100%, shared and private data visibility, analytics charts and forecast, settlement tracking/payment/history, saved CSV/XLSX inspection, dark-mode persistence/chart rendering, and a 390 px no-overflow check.
+- Live Neon integration passed again. A post-test read-only `db-status` confirmed TLS, Alembic head `f54d2e96b1c7`, and the original 2 users, 1 group, and 57 transactions. The live test's own unique synthetic fixtures were cleaned up.
+- Backend: 88 passed, 1 live test skipped by default; the separate Neon test passed. Frontend: 92 passed. Production build and `git diff --check`: passed.
+- Analytics queries now issue fewer SQL statements. The browser entry bundle is about 64% smaller raw after route-level splitting; see the performance investigation note in the Phase 2 regression section for the small-sample Neon timings and remaining cold-start/network contribution.
+- Phase 2 means the agreed private friends/family web-app scope. Background email/push notifications, production hosting, backup/restore, and security review remain outside the Phase 2 gate. Phase 3 remains untouched. Nothing was committed or pushed.
+
+## 2026-09-25 Render deployment preparation
+
+- Added `render.yaml` for a Python 3.12.14 FastAPI web service and a Vite static site using the repository's `sharedspend/` nested application path. The Blueprint does not define or create a database; `DATABASE_URL` is supplied from the existing Neon database in Render.
+- The API starts with pending Alembic migrations applied, binds to `0.0.0.0:$PORT`, and uses the existing `/health` route. The React static site builds with npm from `package-lock.json`, publishes `dist`, and rewrites SPA paths to `index.html`.
+- Production settings now reject a weak/default signing key, a non-PostgreSQL URL, or wildcard/local/non-HTTPS CORS origins; added regression tests. Development SQLite defaults are unchanged.
+- Render deployment is not performed. Neon URL, production secret, and the final frontend origin still need to be entered in Render. No credentials are stored in the Blueprint or docs. Automatic deploys are disabled pending user-controlled setup.
+- Local YAML parsing/deployment-structure assertions passed. Backend suite: 98 passed, 1 opt-in live-PostgreSQL test skipped; frontend suite: 92 passed; Playwright E2E: 1 passed; production build passed. A Render CLI/API Blueprint validation and real deployment have not been run.
