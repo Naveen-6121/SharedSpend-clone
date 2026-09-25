@@ -44,7 +44,9 @@ npm run test:e2e
 
 `test:e2e` starts the checkout's FastAPI backend with an isolated in-memory
 SQLite database and a temporary signing key, starts Vite on port 5174, and runs
-the two-user Chromium browser flow. It does not connect to or write to Neon.
+the two-user Chromium browser flow. The runner overrides any inherited
+`TEST_DATABASE_URL` with an empty value in its backend process; it does not
+connect to or write to Neon.
 Install the Playwright Chromium browser once with `npx playwright install chromium`
 if it is not already present.
 
@@ -65,44 +67,89 @@ claim that Neon cold starts or network latency have been eliminated.
 
 | Variable | Default | Description |
 |---|---|---|
-| DATABASE_URL | sqlite+aiosqlite:///./sharedspend.db | Database connection string |
-| APP_ENV | development | SQLite `create_all` is enabled only for local development |
+| DATABASE_URL | sqlite+aiosqlite:///./sharedspend.db | Local SQLite or production database URL; ignored in staging |
+| TEST_DATABASE_URL | unset | Required Neon test URL when `APP_ENV=staging`; ignored by development and rejected in production |
+| APP_ENV | development | `development` uses local config, `staging` requires `TEST_DATABASE_URL`, `production` uses `DATABASE_URL` |
 | SECRET_KEY | (required) | JWT signing key |
 | ACCESS_TOKEN_EXPIRE_MINUTES | 15 | Access token TTL |
 | REFRESH_TOKEN_EXPIRE_DAYS | 7 | Refresh token TTL |
 | CORS_ORIGINS | Local development defaults to http://localhost:5173; required in production | Allowed HTTPS site origins in production (comma-separated) |
 
-## Shared PostgreSQL with Neon
+## Database environment separation
 
-Local development can continue using the default SQLite database. The intended shared-database direction for private use across devices is managed PostgreSQL, with Neon Free as the current candidate. PostgreSQL URL handling, Alembic migrations, client TLS, and runtime API behavior were verified against one disposable Neon database on 2026-09-25. This is integration evidence only, not production readiness. Keep using a disposable branch/database for repeats. Keep `backend/.env` and all database credentials private.
+Use separate settings for local development, Neon test/staging, and production.
+The test database URL is never substituted for `DATABASE_URL` implicitly:
 
-```dotenv
-APP_ENV=production
-DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB?sslmode=require
-SECRET_KEY=<a long random secret>
-```
+| Environment | `APP_ENV` | Database setting | Behavior |
+|---|---|---|---|
+| Local | `development` | `DATABASE_URL=sqlite+aiosqlite:///./sharedspend.db` (default) | SQLite schema creation is enabled for local development. If `TEST_DATABASE_URL` is present in `.env`, it is ignored; local mode rejects PostgreSQL `DATABASE_URL`. |
+| Test/staging | `staging` | `TEST_DATABASE_URL=<Neon TEST connection string>` | A PostgreSQL test URL is required. `DATABASE_URL` is not used for connection selection. There is no fallback when the test URL is missing. |
+| Production | `production` | `DATABASE_URL=<Neon PRODUCTION connection string>` in Render | Production continues to use `DATABASE_URL`; setting `TEST_DATABASE_URL` is rejected. Keep the production URL and `SECRET_KEY` only in Render's environment settings. |
+
+The actual test and production URLs are placeholders above; never replace them
+with credentials in this README or any tracked file. Keep real URLs and
+passwords in the ignored local `backend/.env` file, process environment, or the
+appropriate deployment secret store. Do not copy production users, passwords, transactions, or other
+family data into the test project. The prior disposable-Neon integration run
+proves PostgreSQL support, not that either current Render production or Neon
+TEST dashboard configuration has been inspected.
 
 The application selects SQLAlchemy's async PostgreSQL driver from a standard
 `postgresql://` or `postgres://` URI. Neon URLs using `sslmode=require` are
 normalized to asyncpg's `ssl=require`, so the connection requires TLS. The
 asyncpg driver does not accept Neon/libpq's `channel_binding` URL option; the
 application removes that option. The pooled-endpoint engine settings remain in
-place. Every backend instance must use the same `DATABASE_URL` and `SECRET_KEY`.
-Keep them in the ignored `backend/.env` file or the deployment secret store;
-never paste the URL into commands, tickets, logs, or source control.
+place. Production backend instances must use the same production `DATABASE_URL`
+and `SECRET_KEY`. Staging reads only `TEST_DATABASE_URL`; development ignores
+it, and production rejects it if configured.
 
-Run migrations deliberately from the backend directory before starting the
-application. Prefer Neon’s direct connection for schema migration; use the
-pooled URI for the app if required by the deployment:
+The checked-in Render Blueprint declares `DATABASE_URL` as a dashboard-managed
+production variable and does not declare `TEST_DATABASE_URL` or create a
+database. Its value is intentionally not stored in Git. The Blueprint alone
+cannot prove which Neon project is configured in an existing Render dashboard;
+verify that secret there without copying it into source control.
 
-```bash
+Run migrations deliberately for the selected environment before starting the
+application. Startup never runs Alembic migrations automatically. For local
+SQLite, use `APP_ENV=development` and the local `DATABASE_URL`. For test/staging,
+make the Neon TEST connection available as `TEST_DATABASE_URL` in the ignored
+`backend/.env` or the private process environment, then select `APP_ENV=staging`.
+Staging chooses only `TEST_DATABASE_URL`; it does not use the `.env`
+`DATABASE_URL`. For additional protection when a local `.env` contains a
+production URL, use an isolated shell and a harmless SQLite process override
+for `DATABASE_URL`. On Windows PowerShell:
+
+```powershell
 cd backend
+$env:APP_ENV = "staging"
+$env:DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 alembic current
 alembic upgrade head
 alembic current
 python -m app.cli db-status
-uvicorn app.main:app --reload --port 8000
+$env:SHAREDSPEND_LIVE_POSTGRES = "1"
+pytest tests/test_postgres_live.py -q
+Remove-Item Env:SHAREDSPEND_LIVE_POSTGRES
+Remove-Item Env:APP_ENV
+Remove-Item Env:TEST_DATABASE_URL
+Remove-Item Env:DATABASE_URL
 ```
+
+The live integration test requires both `APP_ENV=staging` and
+`TEST_DATABASE_URL` in configuration. It will not fall back to
+`DATABASE_URL`. It creates uniquely named synthetic rows and removes only rows
+created by that invocation. Do not run it against production or personal data.
+
+Production migrations are also manual. Run them only in an isolated one-off
+environment that does not load a local `.env` containing `TEST_DATABASE_URL`.
+Only after confirming the production target in Render, taking the appropriate
+backup, and planning the maintenance window, run Alembic from a one-off shell
+with `APP_ENV=production` and the existing production `DATABASE_URL` loaded
+from the approved secret store. Run
+`alembic current`, `alembic upgrade head`, and `alembic current` there before
+starting or scaling the API. Never use `TEST_DATABASE_URL` for that procedure.
+The Render start command only launches Uvicorn and does not apply schema
+changes. Do not run production migrations as part of app startup.
 
 `db-status` checks connectivity and prints the driver, database name, TLS
 state, current Alembic revision(s), expected head(s), table names, and core row
@@ -127,24 +174,20 @@ The SQL Editor is a safe place to view test data without copying connection
 secrets into a terminal. Treat transaction data and screenshots as private.
 For a pooled Neon URL, `pg_stat_ssl` describes the pooler's server-side
 connection and may report false even when the client-to-pooler connection uses
-TLS. `python -m app.cli db-status` checks the active client's TLS transport; the
-current disposable Neon connection reported TLS enabled.
-Use a disposable Neon branch/database for integration tests, never production
-or personal data. `backend/tests/test_postgres_live.py` creates uniquely named
-synthetic rows and removes only the rows created by that invocation in its
-scoped cleanup block. From `backend`, after configuring the disposable URL
-in the ignored `.env` and applying migrations, opt in explicitly in PowerShell:
-
-```powershell
-$env:SHAREDSPEND_LIVE_POSTGRES = "1"
-pytest tests/test_postgres_live.py -q
-Remove-Item Env:SHAREDSPEND_LIVE_POSTGRES
-```
+TLS. `python -m app.cli db-status` checks the active client's TLS transport.
+Use only the separate Neon TEST project for live integration tests, never
+production or personal data. `backend/tests/test_postgres_live.py` creates
+uniquely named synthetic rows and removes only rows created by that invocation
+in its scoped cleanup block. The current Neon TEST project was migrated and
+validated on 2026-09-25: TLS was enabled, all expected tables were present,
+Alembic was at `f54d2e96b1c7`, and the live two-user/two-group scenario passed.
+The post-test status showed no remaining synthetic users, groups, or
+transactions. The separate Render production database was not accessed.
 
 The test verifies client TLS, tables and Alembic head, the authenticated database
 health endpoint, persisted records, and a two-user/two-group API scenario. It
-passed against the configured disposable Neon database on 2026-09-25. A separate
-manual browser smoke through the actual frontend and FastAPI backend also passed
+passed against the current Neon TEST database on 2026-09-25. A separate manual
+browser smoke through the actual frontend and FastAPI backend also passed
 registration, group creation, budget save, shared transaction, and Dashboard/
 Analytics/Forecast consistency against Neon. The live test removes its own
 synthetic rows after the run. Do not use it on production or personal data.

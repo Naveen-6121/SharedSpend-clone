@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List
 from urllib.parse import urlsplit
 
+from pydantic import Field
 from sqlalchemy.engine import make_url
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -13,8 +14,11 @@ _EXAMPLE_SECRET_KEY = "change_me_to_a_random_32_byte_hex_string"
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "sqlite+aiosqlite:///./sharedspend.db"
-    SECRET_KEY: str = _DEVELOPMENT_SECRET_KEY
+    DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./sharedspend.db", repr=False)
+    # Staging is deliberately separate from DATABASE_URL so a missing test URL
+    # cannot fall back to a local .env value that may point at production.
+    TEST_DATABASE_URL: str | None = Field(default=None, repr=False)
+    SECRET_KEY: str = Field(default=_DEVELOPMENT_SECRET_KEY, repr=False)
     APP_ENV: str = "development"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -26,10 +30,38 @@ class Settings(BaseSettings):
 
     def __init__(self, **values):
         super().__init__(**values)
+        self._validate_database_environment()
         self._validate_production_settings()
 
+    def _validate_database_environment(self) -> None:
+        environment = self.APP_ENV.strip().lower()
+        if environment not in {"development", "staging", "production"}:
+            raise ValueError("APP_ENV must be development, staging, or production")
+
+        if environment == "staging":
+            if not self.TEST_DATABASE_URL or not self.TEST_DATABASE_URL.strip():
+                raise ValueError("staging requires TEST_DATABASE_URL; DATABASE_URL is not used")
+
+            try:
+                test_url = make_url(self.TEST_DATABASE_URL)
+            except Exception:
+                raise ValueError("staging requires a valid PostgreSQL TEST_DATABASE_URL") from None
+            if test_url.get_backend_name() != "postgresql":
+                raise ValueError("staging requires a PostgreSQL TEST_DATABASE_URL")
+        elif environment == "development":
+            try:
+                development_url = make_url(self.DATABASE_URL)
+            except Exception:
+                raise ValueError("development requires a local SQLite DATABASE_URL") from None
+            if development_url.get_backend_name() != "sqlite":
+                raise ValueError(
+                    "development requires SQLite; use APP_ENV=staging with TEST_DATABASE_URL for Neon"
+                )
+        elif self.TEST_DATABASE_URL:
+            raise ValueError("production must use DATABASE_URL and must not set TEST_DATABASE_URL")
+
     def _validate_production_settings(self) -> None:
-        if self.APP_ENV.lower() != "production":
+        if self.APP_ENV.strip().lower() != "production":
             return
 
         if (
@@ -62,7 +94,14 @@ class Settings(BaseSettings):
     @property
     def async_database_url(self) -> str:
         """Normalize provider PostgreSQL URLs for SQLAlchemy's asyncpg driver."""
-        parsed = make_url(self.DATABASE_URL)
+        raw_database_url = (
+            self.TEST_DATABASE_URL
+            if self.APP_ENV.strip().lower() == "staging"
+            else self.DATABASE_URL
+        )
+        if not raw_database_url:
+            raise ValueError("A database URL is required for the selected APP_ENV")
+        parsed = make_url(raw_database_url)
         if parsed.drivername in {"postgres", "postgresql"}:
             parsed = parsed.set(drivername="postgresql+asyncpg")
 

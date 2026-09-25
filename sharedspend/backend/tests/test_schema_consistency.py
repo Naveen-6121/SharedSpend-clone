@@ -57,7 +57,8 @@ def test_neon_postgresql_url_uses_asyncpg_ssl_parameter():
     from sqlalchemy.engine import make_url
 
     configured = Settings(
-        DATABASE_URL=(
+        APP_ENV="staging",
+        TEST_DATABASE_URL=(
             "postgresql://test:encoded%40password@ep-test-pooler.us-east-2.aws.neon.tech/"
             "sharedspend?sslmode=require&channel_binding=require&application_name=sharedspend"
         )
@@ -78,7 +79,8 @@ def test_asyncpg_url_keeps_existing_ssl_and_pooler_parameters():
     from sqlalchemy.engine import make_url
 
     configured = Settings(
-        DATABASE_URL=(
+        APP_ENV="staging",
+        TEST_DATABASE_URL=(
             "postgresql+asyncpg://test:secret@ep-test-pooler.us-east-2.aws.neon.tech/"
             "sharedspend?ssl=require&prepared_statement_cache_size=0"
         )
@@ -95,7 +97,8 @@ def test_postgresql_ssl_parameters_must_not_conflict():
     from app.config import Settings
 
     configured = Settings(
-        DATABASE_URL="postgresql+asyncpg://test:secret@localhost/db?ssl=require&sslmode=disable"
+        APP_ENV="staging",
+        TEST_DATABASE_URL="postgresql+asyncpg://test:secret@localhost/db?ssl=require&sslmode=disable",
     )
     with pytest.raises(ValueError, match="ssl and sslmode options conflict"):
         _ = configured.async_database_url
@@ -104,7 +107,9 @@ def test_postgresql_ssl_parameters_must_not_conflict():
 def test_postgresql_alembic_upgrade_generates_schema_sql():
     backend = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
-    env["DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost/sharedspend"
+    env["APP_ENV"] = "staging"
+    env["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+    env["TEST_DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost/sharedspend"
     completed = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head", "--sql"],
         cwd=backend,

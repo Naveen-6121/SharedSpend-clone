@@ -1,10 +1,12 @@
 """Opt-in live PostgreSQL integration test for a disposable test database.
 
-Run after applying Alembic migrations with DATABASE_URL configured in
-backend/.env: set SHAREDSPEND_LIVE_POSTGRES=1, then run pytest for this file.
-This test creates uniquely named users, groups, budgets, transactions, and
-settlement rows, then removes only fixtures belonging to its unique run ID. It
-never deletes or modifies pre-existing rows.
+Run only with APP_ENV=staging and an explicit TEST_DATABASE_URL from the
+disposable Neon test project. Production DATABASE_URL is never used as a
+fallback. Apply Alembic migrations to that test target first, then set
+SHAREDSPEND_LIVE_POSTGRES=1 and run pytest for this file. This test creates
+uniquely named users, groups, budgets, transactions, and settlement rows, then
+removes only fixtures belonging to its unique run ID. It never deletes or
+modifies pre-existing rows.
 """
 from __future__ import annotations
 
@@ -37,10 +39,15 @@ from tests.test_regression_consistency import (
 @pytest.mark.asyncio
 @pytest.mark.skipif(
     os.getenv("SHAREDSPEND_LIVE_POSTGRES") != "1",
-    reason="set SHAREDSPEND_LIVE_POSTGRES=1 only for an explicitly selected disposable database",
+    reason="opt in only with APP_ENV=staging and TEST_DATABASE_URL for the disposable test database",
 )
 async def test_live_postgres_migrations_admin_and_two_user_app_flow():
-    assert not settings.is_sqlite, "Live PostgreSQL test opt-in requires a PostgreSQL DATABASE_URL"
+    assert os.getenv("APP_ENV", "").strip().lower() == "staging", (
+        "Live PostgreSQL integration requires APP_ENV=staging"
+    )
+    assert settings.APP_ENV.strip().lower() == "staging"
+    assert settings.TEST_DATABASE_URL, "Live PostgreSQL integration requires TEST_DATABASE_URL"
+    assert not settings.is_sqlite, "Live PostgreSQL test opt-in requires PostgreSQL TEST_DATABASE_URL"
 
     async with engine.connect() as connection:
         server = (await connection.execute(text("SELECT version()"))).scalar_one()

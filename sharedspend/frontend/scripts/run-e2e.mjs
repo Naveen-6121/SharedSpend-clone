@@ -54,6 +54,9 @@ const backendEnv = {
   SECRET_KEY: randomBytes(32).toString('hex'),
   CORS_ORIGINS: 'http://127.0.0.1:5174',
 }
+// The E2E backend is intentionally isolated on in-memory SQLite. Explicitly
+// blank any inherited staging URL so it cannot trip selection or reach this app.
+backendEnv.TEST_DATABASE_URL = ''
 const frontendEnv = {
   ...baseEnv,
   VITE_API_BASE_URL: 'http://127.0.0.1:8001',

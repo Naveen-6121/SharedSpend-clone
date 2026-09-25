@@ -60,24 +60,23 @@ normal development workflow.
 
 ## Environment / baseline
 
-- [x] Backend suite: **88 passed, 1 skipped** on 2026-09-25 (the skipped test requires explicit live-PostgreSQL opt-in).
+- [x] Backend suite: **108 passed, 1 skipped** on 2026-09-25 (the skipped test requires explicit live-PostgreSQL opt-in; it passed separately against Neon TEST).
 - [x] Frontend suite: **92 passed** on 2026-09-25.
 - [x] Frontend TypeScript/Vite production build passed on 2026-09-25; route-level code splitting keeps the entry and Analytics chunks below 500 kB.
 - [x] Real-route API integration coverage exists for two users and two groups; a two-user Playwright browser E2E passed on 2026-09-25.
 - [x] Browser E2E verified budget copy/save/reload, 80%/100% alerts, shared/personal transaction visibility, Analytics chart modes, forecast, CSV/XLSX downloads, settlement payment/history, dark-mode persistence, and a 390 px viewport.
-- [x] Live PostgreSQL/Neon client-TLS connection, Alembic migration, and API integration passed against the configured Neon database on 2026-09-25; read-only `db-status` confirms Alembic head and the imported two-user data remains unchanged. Production deployment remains unverified.
+- [x] Neon TEST client-TLS connection, Alembic migration, and API integration passed on 2026-09-25; read-only `db-status` confirms Alembic head. The earlier migrated Neon database and its imported two-user data were not accessed during this work. Production deployment remains unverified.
 
-Latest locally known committed repository baseline before this continuation (origin/main matches the local ref; live GitHub state was not independently fetched this turn):
+Verified repository baseline before this environment-separation work:
 
 ```text
 Branch: main
-Local main/origin/main commit: 87c40183 docs: update SharedSpend project documentation (local tracking ref matches; live remote tip has not been independently refreshed this turn)
-Application implementation commit: 18d6fe3 feat: update SharedSpend core features and UI
-Local ref: origin/main at 87c40183 (remote tip not independently refreshed this turn)
-Working tree: contains uncommitted PostgreSQL compatibility, analytics query optimization, lazy route loading, Playwright setup, tests, and documentation changes
+Local main/origin/main commit: 7890dc1c269e7c933e5d103cc8c2e0e7484927eb fix: configure production CORS for Render
+Local ref: origin/main at the same commit; verified synchronized
+Working tree before this work: clean
 ```
 
-Current validation on 2026-09-25: backend suite 88 passed / 1 opt-in live-PostgreSQL test skipped (327 SQLite/JWT warnings); the live Neon test separately passed (1 passed, 52 JWT deprecation warnings). Frontend suite 92 passed; TypeScript/Vite production build passed. The Playwright E2E passed against an isolated SQLite test database using two real browser contexts. Read-only Neon `db-status` reported TLS enabled, Alembic at `f54d2e96b1c7`/head, and 2 users, 1 group, and 57 transactions before the live fixture test; the test cleaned up its own uniquely named rows. The prior read-only SQLite/Neon comparison verified IDs and relationships for Naveen and Alekhya, group/memberships, 57 transactions, budget, settlements, group categories, and reused global categories. No production readiness is implied.
+Prior Phase 2 validation before TEST/PRODUCTION separation: backend suite 88 passed / 1 opt-in live-PostgreSQL test skipped (327 SQLite/JWT warnings); the then-configured Neon live test separately passed (1 passed, 52 JWT deprecation warnings). Frontend suite 92 passed; TypeScript/Vite production build passed. Read-only status for that earlier Neon target reported TLS enabled, Alembic at `f54d2e96b1c7`/head, and 2 users, 1 group, and 57 transactions; a prior SQLite/Neon comparison verified the imported Naveen/Alekhya data and relationships. That target was not accessed during the database-separation work below. No production readiness is implied.
 ---
 
 # 3. Phase 1 — MVP
@@ -663,8 +662,16 @@ reference; this file tracks what has actually been implemented.
 - Added `render.yaml` for a Python 3.11 FastAPI web service and a Vite static site using the repository's `sharedspend/` nested application path. `backend/.python-version` pins the service to 3.11 without changing dependency versions. The Blueprint does not define or create a database; `DATABASE_URL` is supplied from the existing Neon database in Render.
 - The API binds to `0.0.0.0:$PORT`, uses the requested Uvicorn start command, and exposes the existing `/health` route. Startup does not modify the schema; confirm Neon is at Alembic head before starting the service and apply any future migration as a deliberate one-off operation. The React static site builds with npm from `package-lock.json`, publishes `dist`, and rewrites SPA paths to `index.html`.
 - Production settings now reject a weak/default signing key, a non-PostgreSQL URL, or wildcard/local/non-HTTPS CORS origins; added regression tests. Development SQLite defaults are unchanged.
-- Render deployment is not performed. Neon URL, production secret, and the final frontend origin still need to be entered in Render. No credentials are stored in the Blueprint or docs. Automatic deploys are disabled pending user-controlled setup.
+- The user later created the Render frontend and backend and reports the production application is working. This checkout does not read Render dashboard secrets or independently verify which Neon project the live `DATABASE_URL` targets. The Blueprint keeps the production database URL, secret, and CORS origin dashboard-managed; no credentials are stored in the repository. Automatic deploys remain disabled.
 - Recovery validation: Python 3.11.9 installed every existing pinned backend requirement; `pydantic-core==2.18.2` resolved to a prebuilt CPython 3.11 Linux wheel. The backend suite passed under both Python 3.11 and 3.12 (98 passed, 1 opt-in live test skipped in each default run). The live Neon integration test passed (1 passed), and the read-only post-test status still showed TLS, Alembic head `f54d2e96b1c7`, 2 users, 1 group, and 57 transactions.
 - Frontend validation: clean `npm ci` and production build passed in an isolated copy; Vitest passed 92 tests and Playwright passed its two-user E2E. A local Uvicorn smoke on Python 3.11 bound to `0.0.0.0:$PORT` and `/health` returned success using a temporary SQLite database. The Vite production bundle used a placeholder API origin and contained no development `localhost:8000` API URL.
 - The direct `npm ci` attempt in the active checkout could not remove the Tailwind native module held by the already-running Vite service. The clean-install checks ran in a temporary copy; missing dependency files were restored to the checkout without overwriting the file held by that service. `npm ci` reported one high-severity advisory for `xlsx` with no fix available from npm; dependency versions were left unchanged and the advisory remains for separate review.
 - Render YAML parsing and structural assertions passed. Render CLI validation, dashboard provisioning, and actual deployment were not run. The Blueprint uses the existing Neon database, has no automatic schema migration in the start command, and keeps auto-deploy disabled. No credentials are stored in the repo.
+
+## 2026-09-25 database environment separation (completed)
+
+- Initial inspection confirmed the app previously used one `DATABASE_URL` from the process environment or ignored `backend/.env`; Alembic reads the same setting. The Render Blueprint declares only dashboard-managed `DATABASE_URL` for production. Alembic is not run automatically by FastAPI startup; startup only creates SQLite tables in development and seeds global categories.
+- Added a dedicated staging selection: `APP_ENV=staging` requires `TEST_DATABASE_URL` and uses it for the app engine, CLI, and Alembic. Staging cannot fall back to `DATABASE_URL`; test commands also set a harmless in-memory SQLite process override for `DATABASE_URL`. Development continues to use SQLite and ignores `TEST_DATABASE_URL`. Production continues to use `DATABASE_URL` and rejects a configured `TEST_DATABASE_URL`.
+- The ignored `backend/.env` contains a `TEST_DATABASE_URL` setting. Only variable names were inspected; no connection string or credential value was printed. All test/migration commands used `APP_ENV=staging`, loaded the TEST URL from the ignored file, and overrode `DATABASE_URL` in process with the SQLite sentinel. The production Render database was not accessed.
+- Neon TEST validation passed: `alembic upgrade head` applied through `f54d2e96b1c7`; `alembic current` and read-only `db-status` confirmed that revision is head, client TLS is enabled, and the expected eight application/schema tables exist. The initial TEST database had no users, groups, or transactions. The live two-user/two-group route test passed (auth, groups, budget, transaction, settlement, analytics/forecast, and admin database health); its uniquely scoped synthetic rows were cleaned up. Post-test counts remained users=0, groups=0, transactions=0. Production migrations remain manual and were not run.
+- Validation: backend `pytest -q` — 108 passed, 1 opt-in live test skipped (327 existing warnings); separate live Neon TEST integration — 1 passed (52 existing UTC deprecation warnings); frontend Vitest — 92 passed; production build — passed; Playwright two-user E2E — 1 passed; `git diff --check` — passed. The README and safe `.env.example` now document TEST/STAGING vs production behavior. No application functionality outside database configuration was changed.
