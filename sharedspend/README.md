@@ -185,16 +185,18 @@ GitHub push does not deploy until you choose to deploy from Render.
 |---|---|
 | Service type/runtime | Web Service / Python |
 | Root directory | `sharedspend/backend` (relative to repository root) |
-| Python | `3.12.14`, matching the local backend environment |
+| Python | `3.11`, pinned in `backend/.python-version` for Render |
 | Build command | `pip install -r requirements.txt` |
-| Start command | `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
 | Health check | `/health` |
 
-The start command applies pending Alembic migrations before starting the API.
-Keep this service at one instance while migrations run at startup. If you later
-scale to multiple instances, move migration execution to a single pre-deploy
-step on a Render plan that supports it. The existing health endpoint returns
-only `{"status":"ok"}`; it does not probe Neon.
+The backend Python version is pinned separately in `backend/.python-version`;
+Render's Python selection supports a major/minor value and selects the latest
+matching patch. Requirements remain unchanged. The service start command does
+not modify the database schema. Confirm the existing Neon database is at the
+current Alembic head before startup; run any future migrations deliberately as
+a single operation before starting or scaling API instances. The existing
+health endpoint returns only `{"status":"ok"}`; it does not probe Neon.
 
 Set these backend environment variables in Render:
 
